@@ -1,0 +1,41 @@
+name: Reusable Repository Micro Tests
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  micro-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '20'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Structural and executable micro-tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$(find . -type f -not -path './.git/*' -print -quit)"
+          if grep -RIl --exclude-dir=.git -E '^(<<<<<<<|=======|>>>>>>>)' . | grep -q .; then echo 'Unresolved merge markers found'; exit 1; fi
+          python - <<'PY'
+          import json, pathlib
+          for p in pathlib.Path('.').rglob('*.json'):
+              if '.git' in p.parts or 'node_modules' in p.parts: continue
+              json.loads(p.read_text(encoding='utf-8'))
+          print('JSON parse OK')
+          PY
+          find . -type f -name '*.sh' -not -path './.git/*' -print0 | xargs -0 -r -n1 bash -n
+          python -m compileall -q .
+          if [ -f package.json ]; then
+            if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+            npm run test --if-present
+            npm run typecheck --if-present
+            npm run lint --if-present
+            npm run build --if-present
+          fi
+          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; elif [ -f pyproject.toml ]; then python -m pip install .; fi
+          if find . -type f \( -name 'test_*.py' -o -name '*_test.py' \) -not -path './.git/*' | grep -q .; then python -m pip install pytest; pytest -q; fi
+          echo 'Repository micro-tests passed.'
