@@ -1,0 +1,10 @@
+name: Repository Micro Tests
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  micro-test:
+    uses: mozartg/mozart-os-succession/.github/workflows/reusable-micro-test.yml@main
