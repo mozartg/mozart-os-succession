@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "repository": "mozartg/mozart-os-succession",
+  "system_of_record": "GitHub",
+  "portfolio_registry": "https://github.com/mozartg/mozart-os/blob/main/portfolio-reorganization/portfolio-registry-v2.json",
+  "family": "core-systems",
+  "lifecycle": "consolidate",
+  "role": "Public predecessor succession material.",
+  "canonical_target": "mozartg/fable-succession-kit",
+  "next_action": "Migrate unique public-safe material, replace README with a canonical pointer, then archive.",
+  "risk": "high",
+  "confidence": "high",
+  "coordination": {
+    "work_lease_issue": "https://github.com/mozartg/mozart-os/issues/13",
+    "heartbeat_issue": "https://github.com/mozartg/mozart-os/issues/14",
+    "parallel_work_policy": "Claim only the paths being changed; preserve newer parallel work and record collisions."
+  },
+  "automation": {
+    "owner_presence_required_for_routine_work": false,
+    "clickup_required": false,
+    "traceability_required": true,
+    "experimentation_allowed": true
+  }
+}
