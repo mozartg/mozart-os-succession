@@ -84,7 +84,54 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m compileall -q -x '(^|/)(\.git|node_modules|\.venv|venv|dist|build|\.next|\.cache)/' .
+          python - <<'PY'
+          import json
+          import pathlib
+          import py_compile
+          import sys
+
+          excluded_dirs = {
+              '.git', 'node_modules', '.venv', 'venv', 'dist', 'build',
+              '.next', '.cache', '__pycache__'
+          }
+          report_dir = pathlib.Path('.ci')
+          report_dir.mkdir(exist_ok=True)
+          failures = []
+          compiled = 0
+
+          for path in sorted(pathlib.Path('.').rglob('*.py')):
+              if any(part in excluded_dirs for part in path.parts):
+                  continue
+              try:
+                  py_compile.compile(str(path), doraise=True)
+                  compiled += 1
+              except py_compile.PyCompileError as exc:
+                  failures.append({'path': str(path), 'error': str(exc)})
+              except (OSError, UnicodeError) as exc:
+                  failures.append({'path': str(path), 'error': repr(exc)})
+
+          report = {
+              'schema': 'repository-python-compile-report.v1',
+              'compiled': compiled,
+              'failed': len(failures),
+              'failures': failures,
+          }
+          (report_dir / 'python-compile-report.json').write_text(
+              json.dumps(report, indent=2) + '\n', encoding='utf-8'
+          )
+          print(json.dumps(report, indent=2))
+          if failures:
+              sys.exit(1)
+          PY
+
+      - name: Upload Python compile report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-compile-report-${{ github.run_id }}
+          path: .ci/python-compile-report.json
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Run Node project checks
         if: ${{ hashFiles('package.json') != '' }}
