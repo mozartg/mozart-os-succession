@@ -14,28 +14,112 @@ jobs:
         with: {node-version: '20'}
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
-      - name: Structural and executable micro-tests
+
+      - name: Confirm repository content
         shell: bash
         run: |
           set -euo pipefail
           test -n "$(find . -type f -not -path './.git/*' -print -quit)"
-          if grep -RIl --exclude-dir=.git -E '^(<<<<<<<|=======|>>>>>>>)' . | grep -q .; then echo 'Unresolved merge markers found'; exit 1; fi
+
+      - name: Reject unresolved merge conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A real unresolved Git conflict includes start/end markers with a label.
+          # Do not treat Markdown Setext headings made of '=' characters as conflicts.
+          markers="$(grep -RIn --exclude-dir=.git -E '^(<<<<<<< |>>>>>>> )' . || true)"
+          if [ -n "$markers" ]; then
+            echo 'Unresolved merge markers found:'
+            printf '%s\n' "$markers"
+            exit 1
+          fi
+
+      - name: Validate strict JSON files
+        shell: bash
+        run: |
+          set -euo pipefail
           python - <<'PY'
-          import json, pathlib
-          for p in pathlib.Path('.').rglob('*.json'):
-              if '.git' in p.parts or 'node_modules' in p.parts: continue
-              json.loads(p.read_text(encoding='utf-8'))
+          import json
+          import pathlib
+          import sys
+
+          excluded_dirs = {
+              '.git', 'node_modules', '.venv', 'venv', 'dist', 'build',
+              '.next', '.cache', '.vscode', '.devcontainer'
+          }
+
+          def is_jsonc(path: pathlib.Path) -> bool:
+              name = path.name.lower()
+              return (
+                  name.startswith('tsconfig')
+                  or name.startswith('jsconfig')
+                  or name.endswith('.code-workspace')
+                  or name == 'devcontainer.json'
+              )
+
+          failures = []
+          for path in pathlib.Path('.').rglob('*.json'):
+              if any(part in excluded_dirs for part in path.parts) or is_jsonc(path):
+                  continue
+              try:
+                  json.loads(path.read_text(encoding='utf-8-sig'))
+              except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                  failures.append(f'{path}: {exc}')
+
+          if failures:
+              print('Strict JSON validation failed:')
+              print('\n'.join(failures))
+              sys.exit(1)
           print('JSON parse OK')
           PY
-          find . -type f -name '*.sh' -not -path './.git/*' -print0 | xargs -0 -r -n1 bash -n
-          python -m compileall -q .
-          if [ -f package.json ]; then
-            if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
-            npm run test --if-present
-            npm run typecheck --if-present
-            npm run lint --if-present
-            npm run build --if-present
+
+      - name: Validate shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          find . -type f -name '*.sh' -not -path './.git/*' -not -path '*/node_modules/*' -print0 |
+            xargs -0 -r -n1 bash -n
+
+      - name: Compile Python sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q -x '(^|/)(\.git|node_modules|\.venv|venv|dist|build|\.next|\.cache)/' .
+
+      - name: Run Node project checks
+        if: ${{ hashFiles('package.json') != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
           fi
-          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; elif [ -f pyproject.toml ]; then python -m pip install .; fi
-          if find . -type f \( -name 'test_*.py' -o -name '*_test.py' \) -not -path './.git/*' | grep -q .; then python -m pip install pytest; pytest -q; fi
-          echo 'Repository micro-tests passed.'
+          npm run test --if-present
+          npm run typecheck --if-present
+          npm run lint --if-present
+          npm run build --if-present
+
+      - name: Install Python project
+        if: ${{ hashFiles('requirements.txt', 'pyproject.toml') != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f requirements.txt ]; then
+            python -m pip install -r requirements.txt
+          elif [ -f pyproject.toml ]; then
+            python -m pip install .
+          fi
+
+      - name: Run Python tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find . -type f \( -name 'test_*.py' -o -name '*_test.py' \) -not -path './.git/*' -not -path '*/.venv/*' -not -path '*/venv/*' | grep -q .; then
+            python -m pip install pytest
+            pytest -q
+          fi
+
+      - name: Report success
+        run: echo 'Repository micro-tests passed.'
