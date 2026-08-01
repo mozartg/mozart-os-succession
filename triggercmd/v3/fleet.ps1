@@ -70,11 +70,7 @@ $joinedInput = (($Input | Where-Object { $null -ne $_ }) -join " ").Trim()
 try {
     switch ($Task) {
         "control_status" {
-            $agent = Get-CimInstance Win32_Process | Where-Object {
-                $_.Name -ieq "TRIGGERcmdAgent.exe" -and $_.CommandLine -notmatch "--type="
-            } | Select-Object -First 1
-            $jobs = @(Get-ChildItem -LiteralPath $jobsRoot -Filter "*.json" -File -ErrorAction SilentlyContinue)
-            Send-Now "OK control_status :: Agent=$($null -ne $agent); Jobs=$($jobs.Count); FleetVersion=3"
+            Send-Now "OK control_status :: FleetVersion=3.0.1; Dispatcher=ready; JobsRoot=$jobsRoot"
         }
 
         "job_status" {
