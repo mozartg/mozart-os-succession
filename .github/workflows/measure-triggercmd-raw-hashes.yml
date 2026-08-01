@@ -1,0 +1,53 @@
+name: Measure raw TRIGGERcmd source hashes
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/measure-triggercmd-raw-hashes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download exact raw URLs and hash bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/raw"
+          mkdir -p "$root"
+          base='https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3'
+          python - <<'PY'
+          import hashlib, json, os, urllib.request
+          from pathlib import Path
+          base='https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3'
+          names=['bootstrap.ps1','fleet.ps1','worker.ps1','tasks.psm1','catdesk-autostart.ps1','catdesk-console-input.ps1']
+          out=[]
+          root=Path(os.environ['RUNNER_TEMP'])/'raw'
+          for name in names:
+              url=f'{base}/{name}'
+              req=urllib.request.Request(url,headers={'User-Agent':'mozart-os-succession-hash-verifier/1.0'})
+              with urllib.request.urlopen(req,timeout=30) as response:
+                  data=response.read()
+              (root/name).write_bytes(data)
+              out.append({'file':name,'url':url,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
+          receipt={'schema_version':1,'operation':'measure_raw_triggercmd_sources','sources':out}
+          path=Path(os.environ['RUNNER_TEMP'])/'triggercmd-raw-hashes.json'
+          path.write_text(json.dumps(receipt,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          print(json.dumps(receipt,indent=2,sort_keys=True))
+          PY
+          sha256sum "$RUNNER_TEMP/triggercmd-raw-hashes.json" > "$RUNNER_TEMP/SHA256SUMS"
+
+      - name: Upload raw hash receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: triggercmd-raw-hashes-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/triggercmd-raw-hashes.json
+            ${{ runner.temp }}/SHA256SUMS
+          retention-days: 14
+          if-no-files-found: error
