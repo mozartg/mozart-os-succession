@@ -17,6 +17,7 @@ param(
         "playwright_status",
         "browser_status",
         "approved_inventory",
+        "media_factory_bootstrap",
         "trigger_reload"
     )]
     [string]$Task,
@@ -78,7 +79,7 @@ $joinedInput = (($Input | Where-Object { $null -ne $_ }) -join " ").Trim()
 try {
     switch ($Task) {
         "control_status" {
-            Send-Now "OK control_status :: FleetVersion=3.1.0; Dispatcher=ready"
+            Send-Now "OK control_status :: FleetVersion=3.1.6; Dispatcher=ready"
         }
         "catdesk_autostart" {
             if (-not (Test-Path -LiteralPath $catdeskStart -PathType Leaf)) { throw "CatDesk autostart script missing." }
