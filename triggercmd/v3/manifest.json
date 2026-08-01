@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "version": "3.0.0",
+  "files": [
+    {
+      "target": "bootstrap.ps1",
+      "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/bootstrap.ps1",
+      "sha256": "f9b93288ee437840476ed4eb30500824cdaba2bcf99d519a03b223620eaa5966"
+    },
+    {
+      "target": "Control\\fleet.ps1",
+      "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/fleet.ps1",
+      "sha256": "e8a9551936190a9efda441f52035dd966e773be0be312526ff5e62a8cc36f686"
+    },
+    {
+      "target": "Control\\worker.ps1",
+      "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/worker.ps1",
+      "sha256": "30375439aeb0d3b35b0fa4bf72897aacb0eaca90d19ecc955b5c003ac2646d22"
+    },
+    {
+      "target": "Control\\tasks.psm1",
+      "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/tasks.psm1",
+      "sha256": "4f1e2792c130d997aa714edcfbd695dffafe294245781af1c07d3c8fdc2aa4de"
+    }
+  ],
+  "commands": [
+    {"trigger":"control_status","task":"control_status","allowParams":false},
+    {"trigger":"job_status","task":"job_status","allowParams":true},
+    {"trigger":"job_result","task":"job_result","allowParams":true},
+    {"trigger":"workspace_list","task":"workspace_list","allowParams":true},
+    {"trigger":"workspace_read","task":"workspace_read","allowParams":true},
+    {"trigger":"system_health","task":"system_health","allowParams":false},
+    {"trigger":"process_find","task":"process_find","allowParams":true},
+    {"trigger":"port_check","task":"port_check","allowParams":true},
+    {"trigger":"command_find","task":"command_find","allowParams":true},
+    {"trigger":"catdesk_status","task":"catdesk_status","allowParams":false},
+    {"trigger":"playwright_status","task":"playwright_status","allowParams":false},
+    {"trigger":"browser_status","task":"browser_status","allowParams":false},
+    {"trigger":"approved_inventory","task":"approved_inventory","allowParams":false},
+    {"trigger":"trigger_reload","task":"trigger_reload","allowParams":false}
+  ]
+}
