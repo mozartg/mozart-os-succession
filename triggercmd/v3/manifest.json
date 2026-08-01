@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "version": "3.1.2",
+  "version": "3.1.3",
   "files": [
     {
       "target": "bootstrap.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/bootstrap.ps1",
-      "sha256": "5ba14e594727d0981dc02eb89b45985b0f185e267a34d8f15e2927f55b705f10"
+      "sha256": "1d2609107581eb0eb4f6abc393d4c64988c1afcfe38e2d4ef75869fb95e3f0fe"
     },
     {
       "target": "Control\\fleet.ps1",
