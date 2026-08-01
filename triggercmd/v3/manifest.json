@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "3.1.9",
+  "version": "3.1.10",
   "files": [
     {
       "target": "bootstrap.ps1",
@@ -54,9 +54,9 @@
   ],
   "oneTimeActions": [
     {
-      "id": "media-factory-bootstrap-20260801",
-      "task": "media_factory_bootstrap",
-      "input": ""
+      "id": "media-factory-bootstrap-diagnostic-20260801",
+      "task": "workspace_list",
+      "input": "TriggerCMD-Scripts\\Control\\Receipts\\OneTime"
     }
   ]
 }
