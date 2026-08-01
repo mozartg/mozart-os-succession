@@ -1,0 +1,43 @@
+name: Validate TRIGGERcmd v3 control plane
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'triggercmd/v3/**'
+      - '.github/workflows/validate-triggercmd-v3.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate manifest hashes and command registration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $PWD 'triggercmd\v3'
+          $manifest = Get-Content (Join-Path $root 'manifest.json') -Raw | ConvertFrom-Json
+          foreach ($file in $manifest.files) {
+            $relative = ([string]$file.target) -replace '^Control\\',''
+            $path = if ([string]$file.target -like 'Control\*') { Join-Path $root $relative } else { Join-Path $root $relative }
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing source file: $path" }
+            $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne ([string]$file.sha256).ToLowerInvariant()) { throw "Hash mismatch: $($file.target) expected=$($file.sha256) actual=$actual" }
+          }
+          foreach ($path in @('bootstrap.ps1','fleet.ps1','worker.ps1','tasks.psm1','catdesk-autostart.ps1','catdesk-console-input.ps1')) {
+            $tokens=$null; $errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $root $path),[ref]$tokens,[ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) { throw "$path syntax: $($errors[0].Message)" }
+          }
+          $command = @($manifest.commands | Where-Object trigger -eq 'media_factory_bootstrap')
+          if ($command.Count -ne 1 -or [string]$command[0].task -ne 'media_factory_bootstrap') { throw 'Media Factory command registration invalid.' }
+          $fleet = Get-Content (Join-Path $root 'fleet.ps1') -Raw
+          $tasks = Get-Content (Join-Path $root 'tasks.psm1') -Raw
+          if ($fleet -notmatch 'media_factory_bootstrap') { throw 'Fleet task missing.' }
+          if ($tasks -notmatch 'Invoke-MediaFactoryBootstrap') { throw 'Task implementation missing.' }
+          Write-Host "Validated Control Plane $($manifest.version) with $($manifest.commands.Count) managed commands."
