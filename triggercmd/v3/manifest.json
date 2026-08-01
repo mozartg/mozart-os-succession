@@ -1,7 +1,12 @@
 {
   "schemaVersion": 1,
-  "version": "3.1.8",
+  "version": "3.1.9",
   "files": [
+    {
+      "target": "bootstrap.ps1",
+      "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/bootstrap.ps1",
+      "sha256": "1d2609107581eb0eb4f6abc393d4c64988c1afcfe38e2d4ef75869fb95e3f0fe"
+    },
     {
       "target": "Control\\fleet.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/fleet.ps1",
@@ -46,5 +51,12 @@
     {"trigger":"approved_inventory","task":"approved_inventory","allowParams":false},
     {"trigger":"media_factory_bootstrap","task":"media_factory_bootstrap","allowParams":false},
     {"trigger":"trigger_reload","task":"trigger_reload","allowParams":false}
+  ],
+  "oneTimeActions": [
+    {
+      "id": "media-factory-bootstrap-20260801",
+      "task": "media_factory_bootstrap",
+      "input": ""
+    }
   ]
 }
