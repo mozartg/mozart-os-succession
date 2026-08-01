@@ -5,7 +5,7 @@
     {
       "target": "bootstrap.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/bootstrap.ps1",
-      "sha256": "1d2609107581eb0eb4f6abc393d4c64988c1afcfe38e2d4ef75869fb95e3f0fe"
+      "sha256": "1b41b13d3b75b687f57147d19a156f14e44c462c6a11b20863492751531b5f36"
     },
     {
       "target": "Control\\fleet.ps1",
