@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Validate deployment hashes, syntax, commands, and one-time actions
+      - name: Validate hashes, syntax, provider routes, and one-time action
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -34,6 +34,7 @@ jobs:
             'Control\tasks.psm1' = 'tasks.psm1'
             'Control\catdesk-autostart.ps1' = 'catdesk-autostart.ps1'
             'Control\catdesk-console-input.ps1' = 'catdesk-console-input.ps1'
+            'Control\media-factory-repository-create.ps1' = 'media-factory-repository-create.ps1'
           }
           foreach ($file in $manifest.files) {
             $sourceName = $mapping[[string]$file.target]
@@ -45,24 +46,26 @@ jobs:
               throw "Raw-byte hash mismatch: $($file.target) expected=$($file.sha256) actual=$actual"
             }
           }
-          foreach ($path in @('bootstrap.ps1','fleet.ps1','worker.ps1','tasks.psm1','catdesk-autostart.ps1','catdesk-console-input.ps1')) {
+          foreach ($path in @('bootstrap.ps1','fleet.ps1','worker.ps1','tasks.psm1','catdesk-autostart.ps1','catdesk-console-input.ps1','media-factory-repository-create.ps1')) {
             $tokens=$null; $errors=$null
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $root $path),[ref]$tokens,[ref]$errors) | Out-Null
             if ($errors.Count -gt 0) { throw "$path syntax: $($errors[0].Message)" }
           }
           $command = @($manifest.commands | Where-Object trigger -eq 'media_factory_bootstrap')
           if ($command.Count -ne 1 -or [string]$command[0].task -ne 'media_factory_bootstrap') { throw 'Media Factory command registration invalid.' }
-          $actions = @($manifest.oneTimeActions | Where-Object id -eq 'media-factory-bootstrap-diagnostic-20260801')
-          if ($actions.Count -ne 1 -or [string]$actions[0].task -ne 'workspace_list') { throw 'Media Factory diagnostic action invalid.' }
-          if ([string]$actions[0].input -ne 'TriggerCMD-Scripts\Control\Receipts\OneTime') { throw 'Diagnostic scope must remain receipt-directory-only.' }
+          $actions = @($manifest.oneTimeActions | Where-Object id -eq 'media-factory-bootstrap-provider-routes-20260801')
+          if ($actions.Count -ne 1 -or [string]$actions[0].task -ne 'media_factory_bootstrap') { throw 'Provider-route one-time action invalid.' }
           $bootstrap = Get-Content (Join-Path $root 'bootstrap.ps1') -Raw
           $fleet = Get-Content (Join-Path $root 'fleet.ps1') -Raw
           $tasks = Get-Content (Join-Path $root 'tasks.psm1') -Raw
+          $provider = Get-Content (Join-Path $root 'media-factory-repository-create.ps1') -Raw
           if ($bootstrap -notmatch 'Invoke-OneTimeActions') { throw 'Bootstrap one-time action executor missing.' }
-          if ($bootstrap -notmatch 'Invoke-ControlTask') { throw 'Bootstrap task invocation missing.' }
+          if ($tasks -notmatch 'media-factory-repository-create.ps1') { throw 'Task delegate is not bound to the provider script.' }
+          if ($provider -notmatch 'official_rest_authenticated_user') { throw 'Official REST route receipt is missing.' }
+          if ($provider -notmatch 'gh_cli_authenticated_user_default_owner') { throw 'GitHub CLI fallback receipt is missing.' }
+          if ($provider -notmatch 'credential_disclosed = \$false') { throw 'Credential-disclosure boundary is missing.' }
           if ($fleet -notmatch 'media_factory_bootstrap') { throw 'Fleet task missing.' }
-          if ($tasks -notmatch 'Invoke-MediaFactoryBootstrap') { throw 'Task implementation missing.' }
-          Write-Host "Validated Control Plane $($manifest.version) with a read-only receipt diagnostic."
+          Write-Host "Validated Control Plane $($manifest.version) with staged provider routes and receipt controls."
 
       - name: Verify published raw URLs after main updates
         if: github.event_name == 'push'
