@@ -88,10 +88,13 @@ try {
         throw "Token file is empty."
     }
 
-    $npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
-    if (-not $npm) { throw "npm.cmd not found." }
-    & $npm.Source install -g catdesk@latest *> $null
-    if ($LASTEXITCODE -ne 0) { throw "npm install returned exit code $LASTEXITCODE." }
+    # Stop CatDesk before any possible package update. Windows locks the
+    # installed binary while it is running, which causes npm EBUSY.
+    Get-Process catdesk -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -ieq "node.exe" -and $_.CommandLine -match "(?i)catdesk"
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Seconds 2
 
     $env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
                 [Environment]::GetEnvironmentVariable("Path","User") + ";" +
@@ -101,7 +104,24 @@ try {
         (Get-Command catdesk.cmd -ErrorAction SilentlyContinue).Source,
         "$env:APPDATA\npm\catdesk.cmd"
     ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1
-    if (-not $catdesk) { throw "Official catdesk.cmd not found after npm installation." }
+
+    # Normal startups reuse the installed official package. Install only when
+    # the command is missing; do not upgrade a live global package in place.
+    if (-not $catdesk) {
+        $npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
+        if (-not $npm) { throw "npm.cmd not found." }
+        & $npm.Source install -g catdesk@latest *> $null
+        if ($LASTEXITCODE -ne 0) { throw "npm install returned exit code $LASTEXITCODE." }
+
+        $env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
+                    [Environment]::GetEnvironmentVariable("Path","User") + ";" +
+                    "$env:APPDATA\npm"
+        $catdesk = @(
+            (Get-Command catdesk.cmd -ErrorAction SilentlyContinue).Source,
+            "$env:APPDATA\npm\catdesk.cmd"
+        ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1
+    }
+    if (-not $catdesk) { throw "Official catdesk.cmd not found." }
 
     $slug = $null
     if (Test-Path -LiteralPath $configFile -PathType Leaf) {
@@ -131,12 +151,6 @@ toolCallCount = 0
 "@
     [IO.File]::WriteAllText($configFile,$config,[Text.UTF8Encoding]::new($false))
     Remove-Variable token -ErrorAction SilentlyContinue
-
-    Get-Process catdesk -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        $_.Name -ieq "node.exe" -and $_.CommandLine -match "(?i)catdesk"
-    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    Start-Sleep -Seconds 2
 
     $launcherText = @"
 @echo off
