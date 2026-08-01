@@ -167,20 +167,15 @@ call "$catdesk"
     Write-Log "Started terminal PID=$($window.Id)."
 
     # CatDesk always opens the mode-selection TUI, even with a saved mode.
-    # Activate its dedicated console and send '1' to choose Computer/local tools.
-    $shell = New-Object -ComObject WScript.Shell
-    $activated = $false
-    for ($i=0; $i -lt 20; $i++) {
-        Start-Sleep -Milliseconds 750
-        if ($shell.AppActivate("CatDesk MCP Server")) {
-            $activated = $true
-            Start-Sleep -Milliseconds 500
-            $shell.SendKeys("1")
-            Write-Log "Sent mode-selection key 1."
-            break
-        }
+    # Inject the '1' key directly into the console buffer without requiring
+    # foreground focus or human interaction.
+    Start-Sleep -Seconds 3
+    $injector = Join-Path $control "catdesk-console-input.ps1"
+    if (-not (Test-Path -LiteralPath $injector -PathType Leaf)) {
+        throw "Console input injector missing: $injector"
     }
-    if (-not $activated) { throw "Could not activate the CatDesk terminal window." }
+    & $injector -ProcessId ([uint32]$window.Id)
+    Write-Log "Injected mode-selection key 1 into CatDesk console."
 
     $online = $false
     for ($i=0; $i -lt 60; $i++) {
