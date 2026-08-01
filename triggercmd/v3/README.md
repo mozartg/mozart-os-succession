@@ -30,6 +30,7 @@ After this one-time bridge, future cloud-side changes require only invoking the 
 
 - `bootstrap` — fetch, validate, back up, install, and restart.
 - `control_status` — immediate control-plane status.
+- `result_probe` — fresh trigger alias for `control_status`, used to distinguish stale trigger definitions from result-callback defects.
 - `job_status <job-id>` — immediate durable job metadata.
 - `job_result <job-id>` — immediate durable job output.
 - `workspace_list <path>` — queued directory inventory under `C:\Users\mozar`.
@@ -62,13 +63,27 @@ C:\Users\mozar\TriggerCMD-Scripts\Control\Jobs\<job-id>.json
 
 This avoids the recurring `Trigger sent. No result.` failure caused by trying to finish local diagnostics inside the reply window.
 
+## Callback diagnosis protocol
+
+When an existing trigger returns `[object Object]`, deploy a new trigger name mapped to the same immediate task. Then compare:
+
+1. `bootstrap` returns the installed manifest version and managed-command count.
+2. `list_commands` confirms the new trigger is visible.
+3. `result_probe` must return the same compact string as `control_status`.
+4. If the fresh trigger works but the old trigger fails, the provider-side trigger definition is stale.
+5. If both fail, inspect the MCP result serialization and `SendResult` callback independently.
+6. A passing result requires three repeated successful calls and one negative-path test.
+
+Legacy unmanaged commands may remain in `commands.json`; therefore the provider's total command count can exceed the bootstrap managed-command count. That difference is not itself a contradiction.
+
 ## Current deployment state
 
 - Cloud source: complete.
 - Manifest and hashes: complete.
 - One-time bridge installer: complete.
-- Local v3 deployment: pending the one-time desktop bridge.
-- Current local v2 bootstrap: still working and remotely callable.
+- Local control plane reported version `3.1.5` and CatDesk online through a returned bootstrap result on 2026-08-01.
+- Most non-bootstrap command callbacks still returned `[object Object]` or no result during the same session.
+- Version `3.1.6` adds `result_probe` to isolate stale-trigger behavior after deployment.
 
 ## Operating boundary
 

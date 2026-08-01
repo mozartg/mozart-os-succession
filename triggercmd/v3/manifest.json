@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "3.1.5",
+  "version": "3.1.6",
   "files": [
     {
       "target": "bootstrap.ps1",
@@ -35,6 +35,7 @@
   ],
   "commands": [
     {"trigger":"control_status","task":"control_status","allowParams":false},
+    {"trigger":"result_probe","task":"control_status","allowParams":false},
     {"trigger":"job_status","task":"job_status","allowParams":true},
     {"trigger":"job_result","task":"job_result","allowParams":true},
     {"trigger":"workspace_list","task":"workspace_list","allowParams":true},
