@@ -136,13 +136,13 @@ try {
     if (Test-Path -LiteralPath $catdeskState -PathType Leaf) {
         try {
             $catState = Get-Content -LiteralPath $catdeskState -Raw | ConvertFrom-Json
-            $catdeskSummary = "Online=$($catState.online);Phase=$($catState.phase);URL=$($catState.connectorUrl);Error=$($catState.error)"
+            $catdeskSummary = "Online=$($catState.online) Phase=$($catState.phase) URL=$($catState.connectorUrl) Error=$($catState.error)"
         } catch {
             $catdeskSummary = "status-unreadable"
         }
     }
 
-    Send-Now "OK bootstrap :: Installed v$($manifest.version); Commands=$($managed.Count); CatDesk=$catdeskSummary"
+    Send-Now "CATDESK :: $catdeskSummary | ControlPlane=$($manifest.version) Commands=$($managed.Count)"
 
     if (Test-Path -LiteralPath $catdeskStart -PathType Leaf) {
         Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(
