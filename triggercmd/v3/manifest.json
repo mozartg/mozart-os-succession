@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "3.1.11",
+  "version": "3.1.12",
   "files": [
     {
       "target": "bootstrap.ps1",
@@ -24,6 +24,11 @@
     },
     {
       "target": "Control\\catdesk-autostart.ps1",
+      "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/catdesk-autostart-wrapper.ps1",
+      "sha256": "4f55b16484b1d37ae0cf540de153766f3d4937c20d993b29a9eb524bbb081db8"
+    },
+    {
+      "target": "Control\\catdesk-autostart-core.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/catdesk-autostart.ps1",
       "sha256": "76f097446ee7f7c8b88eab4d4f4a4e5f9157af6c4d0092bf362a6a0e6ce53a08"
     },
