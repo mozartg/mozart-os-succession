@@ -30,7 +30,7 @@
     {
       "target": "Control\\catdesk-console-input.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/catdesk-console-input.ps1",
-      "sha256": "3a5af77b7e1830edb79d1528694d03c4e261c5d05b9d8f9e42f4c532a0a90486"
+      "sha256": "a6fdea5d53bf32019839acff959cd764f4bb65de01037b699555a7882d7d7c64"
     }
   ],
   "commands": [
