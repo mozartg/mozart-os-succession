@@ -6,28 +6,44 @@ on:
     paths:
       - 'triggercmd/v3/**'
       - '.github/workflows/validate-triggercmd-v3.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'triggercmd/v3/**'
+      - '.github/workflows/validate-triggercmd-v3.yml'
 
 permissions:
   contents: read
 
 jobs:
   validate:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Validate manifest hashes and command registration
+      - name: Validate deployment hashes, PowerShell syntax, and command registration
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $root = Join-Path $PWD 'triggercmd\v3'
+          $root = Join-Path $PWD 'triggercmd/v3'
           $manifest = Get-Content (Join-Path $root 'manifest.json') -Raw | ConvertFrom-Json
+          $mapping = @{
+            'bootstrap.ps1' = 'bootstrap.ps1'
+            'Control\fleet.ps1' = 'fleet.ps1'
+            'Control\worker.ps1' = 'worker.ps1'
+            'Control\tasks.psm1' = 'tasks.psm1'
+            'Control\catdesk-autostart.ps1' = 'catdesk-autostart.ps1'
+            'Control\catdesk-console-input.ps1' = 'catdesk-console-input.ps1'
+          }
           foreach ($file in $manifest.files) {
-            $relative = ([string]$file.target) -replace '^Control\\',''
-            $path = if ([string]$file.target -like 'Control\*') { Join-Path $root $relative } else { Join-Path $root $relative }
+            $sourceName = $mapping[[string]$file.target]
+            if ([string]::IsNullOrWhiteSpace($sourceName)) { throw "Unmapped managed target: $($file.target)" }
+            $path = Join-Path $root $sourceName
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing source file: $path" }
             $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($actual -ne ([string]$file.sha256).ToLowerInvariant()) { throw "Hash mismatch: $($file.target) expected=$($file.sha256) actual=$actual" }
+            if ($actual -ne ([string]$file.sha256).ToLowerInvariant()) {
+              throw "Raw-byte hash mismatch: $($file.target) expected=$($file.sha256) actual=$actual"
+            }
           }
           foreach ($path in @('bootstrap.ps1','fleet.ps1','worker.ps1','tasks.psm1','catdesk-autostart.ps1','catdesk-console-input.ps1')) {
             $tokens=$null; $errors=$null
@@ -40,4 +56,23 @@ jobs:
           $tasks = Get-Content (Join-Path $root 'tasks.psm1') -Raw
           if ($fleet -notmatch 'media_factory_bootstrap') { throw 'Fleet task missing.' }
           if ($tasks -notmatch 'Invoke-MediaFactoryBootstrap') { throw 'Task implementation missing.' }
-          Write-Host "Validated Control Plane $($manifest.version) with $($manifest.commands.Count) managed commands."
+          Write-Host "Validated raw deployment bytes for Control Plane $($manifest.version) with $($manifest.commands.Count) managed commands."
+
+      - name: Verify published raw URLs after main updates
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifest = Get-Content 'triggercmd/v3/manifest.json' -Raw | ConvertFrom-Json
+          $temp = Join-Path $env:RUNNER_TEMP 'published'
+          New-Item -ItemType Directory -Force -Path $temp | Out-Null
+          foreach ($file in $manifest.files) {
+            $name = ([string]$file.target -replace '[\\/]','-')
+            $path = Join-Path $temp $name
+            Invoke-WebRequest -Uri (([string]$file.url) + '?verify=' + $env:GITHUB_SHA) -OutFile $path -UseBasicParsing
+            $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne ([string]$file.sha256).ToLowerInvariant()) {
+              throw "Published URL hash mismatch: $($file.target) expected=$($file.sha256) actual=$actual"
+            }
+          }
+          Write-Host 'Published raw GitHub URLs match the deployment manifest.'
