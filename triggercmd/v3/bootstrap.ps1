@@ -93,7 +93,7 @@ try {
     $final = @($kept)
     $final += [pscustomobject][ordered]@{
         trigger="bootstrap"
-        command='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "C:\Users\mozar\TriggerCMD-Scripts\bootstrap.ps1"'
+        command='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File C:\Users\mozar\TriggerCMD-Scripts\bootstrap.ps1'
         offCommand=""
         ground="foreground"
         voice=""
@@ -102,7 +102,7 @@ try {
     }
 
     foreach ($definition in $manifest.commands) {
-        $commandText = 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "C:\Users\mozar\TriggerCMD-Scripts\Control\fleet.ps1" -Task ' + [string]$definition.task
+        $commandText = 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File C:\Users\mozar\TriggerCMD-Scripts\Control\fleet.ps1 -Task ' + [string]$definition.task
         if ([bool]$definition.allowParams) { $commandText += ' -Input' }
 
         $final += [pscustomobject][ordered]@{
