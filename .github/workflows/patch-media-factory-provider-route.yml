@@ -50,7 +50,7 @@ jobs:
 
           function Invoke-ControlTask {'''
           pattern = r'function Invoke-MediaFactoryBootstrap \{.*?\n\}\n\nfunction Invoke-ControlTask \{'
-          updated, count = re.subn(pattern, replacement, tasks, count=1, flags=re.S)
+          updated, count = re.subn(pattern, lambda _: replacement, tasks, count=1, flags=re.S)
           if count != 1:
               raise SystemExit('Could not replace exactly one Invoke-MediaFactoryBootstrap function.')
           tasks_path.write_text(updated, encoding='utf-8', newline='\n')
