@@ -1,0 +1,62 @@
+name: Measure raw TRIGGERcmd source hashes
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/measure-triggercmd-raw-hashes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Reproduce Invoke-WebRequest deployment downloads
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = 'https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3'
+          $version = '3.1.8'
+          $names = @('fleet.ps1','worker.ps1','tasks.psm1','catdesk-autostart.ps1','catdesk-console-input.ps1')
+          $root = Join-Path $env:RUNNER_TEMP 'windows-iwr'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          $sources = @()
+          foreach ($name in $names) {
+            $url = "$base/$name`?v=$version"
+            $path = Join-Path $root $name
+            Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing
+            $bytes = [IO.File]::ReadAllBytes($path)
+            $sources += [ordered]@{
+              file = $name
+              url = $url
+              bytes = $bytes.Length
+              sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+              starts_with_utf8_bom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
+              crlf_count = ([Text.Encoding]::UTF8.GetString($bytes).Split("`r`n").Count - 1)
+              lf_count = ([Text.Encoding]::UTF8.GetString($bytes).Split("`n").Count - 1)
+            }
+          }
+          $receipt = [ordered]@{
+            schema_version = 1
+            operation = 'measure_windows_powershell_iwr_v3_1_8'
+            powershell_version = $PSVersionTable.PSVersion.ToString()
+            sources = $sources
+          }
+          $receiptPath = Join-Path $env:RUNNER_TEMP 'triggercmd-windows-iwr-hashes.json'
+          [IO.File]::WriteAllText($receiptPath,($receipt | ConvertTo-Json -Depth 20),[Text.UTF8Encoding]::new($false))
+          Get-Content $receiptPath -Raw
+          $digest = (Get-FileHash -LiteralPath $receiptPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText((Join-Path $env:RUNNER_TEMP 'SHA256SUMS'),"$digest  triggercmd-windows-iwr-hashes.json`n",[Text.UTF8Encoding]::new($false))
+
+      - name: Upload Windows IWR hash receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: triggercmd-windows-iwr-hashes-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/triggercmd-windows-iwr-hashes.json
+            ${{ runner.temp }}/SHA256SUMS
+          retention-days: 14
+          if-no-files-found: error
