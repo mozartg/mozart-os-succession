@@ -11,6 +11,8 @@ $backupRoot   = Join-Path $controlRoot "Backups"
 $triggerData  = Join-Path $userRoot ".TRIGGERcmdData"
 $commandsPath = Join-Path $triggerData "commands.json"
 $sendResult   = Join-Path $triggerData "sendresult.bat"
+$catdeskStart = Join-Path $controlRoot "catdesk-autostart.ps1"
+$catdeskState = Join-Path $scriptRoot "Autonomy\catdesk-autostart-status.json"
 $manifestUrl  = "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/manifest.json"
 $stamp        = Get-Date -Format "yyyyMMdd-HHmmss"
 
@@ -130,7 +132,23 @@ try {
     Move-Item -LiteralPath $tempCommands -Destination $commandsPath -Force
     [IO.File]::WriteAllText((Join-Path $controlRoot "installed-version.json"),($manifest | ConvertTo-Json -Depth 20),[Text.UTF8Encoding]::new($false))
 
-    Send-Now "OK bootstrap :: Installed control plane v$($manifest.version); Commands=$($managed.Count); Backup=$versionBackup"
+    $catdeskSummary = "not-run"
+    if (Test-Path -LiteralPath $catdeskState -PathType Leaf) {
+        try {
+            $catState = Get-Content -LiteralPath $catdeskState -Raw | ConvertFrom-Json
+            $catdeskSummary = "Online=$($catState.online);Phase=$($catState.phase);URL=$($catState.connectorUrl);Error=$($catState.error)"
+        } catch {
+            $catdeskSummary = "status-unreadable"
+        }
+    }
+
+    Send-Now "OK bootstrap :: Installed v$($manifest.version); Commands=$($managed.Count); CatDesk=$catdeskSummary"
+
+    if (Test-Path -LiteralPath $catdeskStart -PathType Leaf) {
+        Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(
+            "-NoProfile","-ExecutionPolicy","Bypass","-File",$catdeskStart
+        )
+    }
 
     $agentExe = Get-ChildItem -LiteralPath (Join-Path $env:LOCALAPPDATA "TRIGGERcmdAgent") -Filter "TRIGGERcmdAgent.exe" -File -Recurse |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
