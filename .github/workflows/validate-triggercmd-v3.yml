@@ -52,8 +52,9 @@ jobs:
           }
           $command = @($manifest.commands | Where-Object trigger -eq 'media_factory_bootstrap')
           if ($command.Count -ne 1 -or [string]$command[0].task -ne 'media_factory_bootstrap') { throw 'Media Factory command registration invalid.' }
-          $actions = @($manifest.oneTimeActions | Where-Object id -eq 'media-factory-bootstrap-20260801')
-          if ($actions.Count -ne 1 -or [string]$actions[0].task -ne 'media_factory_bootstrap') { throw 'Media Factory one-time action invalid.' }
+          $actions = @($manifest.oneTimeActions | Where-Object id -eq 'media-factory-bootstrap-diagnostic-20260801')
+          if ($actions.Count -ne 1 -or [string]$actions[0].task -ne 'workspace_list') { throw 'Media Factory diagnostic action invalid.' }
+          if ([string]$actions[0].input -ne 'TriggerCMD-Scripts\Control\Receipts\OneTime') { throw 'Diagnostic scope must remain receipt-directory-only.' }
           $bootstrap = Get-Content (Join-Path $root 'bootstrap.ps1') -Raw
           $fleet = Get-Content (Join-Path $root 'fleet.ps1') -Raw
           $tasks = Get-Content (Join-Path $root 'tasks.psm1') -Raw
@@ -61,7 +62,7 @@ jobs:
           if ($bootstrap -notmatch 'Invoke-ControlTask') { throw 'Bootstrap task invocation missing.' }
           if ($fleet -notmatch 'media_factory_bootstrap') { throw 'Fleet task missing.' }
           if ($tasks -notmatch 'Invoke-MediaFactoryBootstrap') { throw 'Task implementation missing.' }
-          Write-Host "Validated Control Plane $($manifest.version), $($manifest.commands.Count) commands, and $(@($manifest.oneTimeActions).Count) one-time action."
+          Write-Host "Validated Control Plane $($manifest.version) with a read-only receipt diagnostic."
 
       - name: Verify published raw URLs after main updates
         if: github.event_name == 'push'
