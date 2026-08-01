@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "3.1.10",
+  "version": "3.1.11",
   "files": [
     {
       "target": "bootstrap.ps1",
@@ -20,7 +20,7 @@
     {
       "target": "Control\\tasks.psm1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/tasks.psm1",
-      "sha256": "5e149de441c9572f153fac240662752aa3a6cf7cfcd6da3da41a7f9a0610bd31"
+      "sha256": "cbb8d622eeaca97ff1eec7d69237500cfbb892e5f7965fbd9acea5ba83343423"
     },
     {
       "target": "Control\\catdesk-autostart.ps1",
@@ -31,32 +31,105 @@
       "target": "Control\\catdesk-console-input.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/catdesk-console-input.ps1",
       "sha256": "3a5af77b7e1830edb79d1528694d03c4e261c5d05b9d8f9e42f4c532a0a90486"
+    },
+    {
+      "target": "Control\\media-factory-repository-create.ps1",
+      "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/media-factory-repository-create.ps1",
+      "sha256": "2a594a4ab746fe21053cbd363f4e5b6daa24510b7be876eeae1092543be16d59"
     }
   ],
   "commands": [
-    {"trigger":"control_status","task":"control_status","allowParams":false},
-    {"trigger":"job_status","task":"job_status","allowParams":true},
-    {"trigger":"job_result","task":"job_result","allowParams":true},
-    {"trigger":"workspace_list","task":"workspace_list","allowParams":true},
-    {"trigger":"workspace_read","task":"workspace_read","allowParams":true},
-    {"trigger":"system_health","task":"system_health","allowParams":false},
-    {"trigger":"process_find","task":"process_find","allowParams":true},
-    {"trigger":"port_check","task":"port_check","allowParams":true},
-    {"trigger":"command_find","task":"command_find","allowParams":true},
-    {"trigger":"catdesk_status","task":"catdesk_status","allowParams":false},
-    {"trigger":"catdesk_autostart","task":"catdesk_autostart","allowParams":false},
-    {"trigger":"catdesk_probe","task":"catdesk_probe","allowParams":false},
-    {"trigger":"playwright_status","task":"playwright_status","allowParams":false},
-    {"trigger":"browser_status","task":"browser_status","allowParams":false},
-    {"trigger":"approved_inventory","task":"approved_inventory","allowParams":false},
-    {"trigger":"media_factory_bootstrap","task":"media_factory_bootstrap","allowParams":false},
-    {"trigger":"trigger_reload","task":"trigger_reload","allowParams":false}
+    {
+      "trigger": "control_status",
+      "task": "control_status",
+      "allowParams": false
+    },
+    {
+      "trigger": "job_status",
+      "task": "job_status",
+      "allowParams": true
+    },
+    {
+      "trigger": "job_result",
+      "task": "job_result",
+      "allowParams": true
+    },
+    {
+      "trigger": "workspace_list",
+      "task": "workspace_list",
+      "allowParams": true
+    },
+    {
+      "trigger": "workspace_read",
+      "task": "workspace_read",
+      "allowParams": true
+    },
+    {
+      "trigger": "system_health",
+      "task": "system_health",
+      "allowParams": false
+    },
+    {
+      "trigger": "process_find",
+      "task": "process_find",
+      "allowParams": true
+    },
+    {
+      "trigger": "port_check",
+      "task": "port_check",
+      "allowParams": true
+    },
+    {
+      "trigger": "command_find",
+      "task": "command_find",
+      "allowParams": true
+    },
+    {
+      "trigger": "catdesk_status",
+      "task": "catdesk_status",
+      "allowParams": false
+    },
+    {
+      "trigger": "catdesk_autostart",
+      "task": "catdesk_autostart",
+      "allowParams": false
+    },
+    {
+      "trigger": "catdesk_probe",
+      "task": "catdesk_probe",
+      "allowParams": false
+    },
+    {
+      "trigger": "playwright_status",
+      "task": "playwright_status",
+      "allowParams": false
+    },
+    {
+      "trigger": "browser_status",
+      "task": "browser_status",
+      "allowParams": false
+    },
+    {
+      "trigger": "approved_inventory",
+      "task": "approved_inventory",
+      "allowParams": false
+    },
+    {
+      "trigger": "media_factory_bootstrap",
+      "task": "media_factory_bootstrap",
+      "allowParams": false
+    },
+    {
+      "trigger": "trigger_reload",
+      "task": "trigger_reload",
+      "allowParams": false
+    }
   ],
   "oneTimeActions": [
     {
-      "id": "media-factory-bootstrap-diagnostic-20260801",
-      "task": "workspace_list",
-      "input": "TriggerCMD-Scripts\\Control\\Receipts\\OneTime"
+      "id": "media-factory-bootstrap-provider-routes-20260801",
+      "task": "media_factory_bootstrap",
+      "input": ""
     }
   ]
 }
