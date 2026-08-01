@@ -14,28 +14,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Download exact raw URLs and hash bytes
+      - name: Download exact v3.1.8 URLs and hash bytes
         shell: bash
         run: |
           set -euo pipefail
           root="$RUNNER_TEMP/raw"
           mkdir -p "$root"
-          base='https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3'
           python - <<'PY'
           import hashlib, json, os, urllib.request
           from pathlib import Path
           base='https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3'
-          names=['bootstrap.ps1','fleet.ps1','worker.ps1','tasks.psm1','catdesk-autostart.ps1','catdesk-console-input.ps1']
+          version='3.1.8'
+          names=['fleet.ps1','worker.ps1','tasks.psm1','catdesk-autostart.ps1','catdesk-console-input.ps1']
           out=[]
           root=Path(os.environ['RUNNER_TEMP'])/'raw'
           for name in names:
-              url=f'{base}/{name}'
-              req=urllib.request.Request(url,headers={'User-Agent':'mozart-os-succession-hash-verifier/1.0'})
+              url=f'{base}/{name}?v={version}'
+              req=urllib.request.Request(url,headers={'User-Agent':'WindowsPowerShell/5.1 Invoke-WebRequest compatible verifier'})
               with urllib.request.urlopen(req,timeout=30) as response:
                   data=response.read()
+                  headers=dict(response.headers.items())
               (root/name).write_bytes(data)
-              out.append({'file':name,'url':url,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
-          receipt={'schema_version':1,'operation':'measure_raw_triggercmd_sources','sources':out}
+              out.append({'file':name,'url':url,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest(),'etag':headers.get('ETag'),'last_modified':headers.get('Last-Modified')})
+          receipt={'schema_version':1,'operation':'measure_exact_v3_1_8_urls','sources':out}
           path=Path(os.environ['RUNNER_TEMP'])/'triggercmd-raw-hashes.json'
           path.write_text(json.dumps(receipt,indent=2,sort_keys=True)+'\n',encoding='utf-8')
           print(json.dumps(receipt,indent=2,sort_keys=True))
