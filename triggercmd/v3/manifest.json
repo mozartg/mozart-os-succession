@@ -10,7 +10,7 @@
     {
       "target": "Control\\fleet.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/fleet.ps1",
-      "sha256": "ba7a355f935694f4050064192dad65817601e55265357bc04dd09a38180037b9"
+      "sha256": "5a0b532446e46145381f2b88b4fc19c7c39385ecbdebea87706fe815d8b279e6"
     },
     {
       "target": "Control\\worker.ps1",
