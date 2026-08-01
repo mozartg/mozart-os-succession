@@ -5,32 +5,32 @@
     {
       "target": "bootstrap.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/bootstrap.ps1",
-      "sha256": "1b41b13d3b75b687f57147d19a156f14e44c462c6a11b20863492751531b5f36"
+      "sha256": "1d2609107581eb0eb4f6abc393d4c64988c1afcfe38e2d4ef75869fb95e3f0fe"
     },
     {
       "target": "Control\\fleet.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/fleet.ps1",
-      "sha256": "5a0b532446e46145381f2b88b4fc19c7c39385ecbdebea87706fe815d8b279e6"
+      "sha256": "ba7a355f935694f4050064192dad65817601e55265357bc04dd09a38180037b9"
     },
     {
       "target": "Control\\worker.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/worker.ps1",
-      "sha256": "fdc67a558b41259f9e3873b0cae4d5d0854531a41305643d8ca6805a6077a583"
+      "sha256": "30375439aeb0d3b35b0fa4bf72897aacb0eaca90d19ecc955b5c003ac2646d22"
     },
     {
       "target": "Control\\tasks.psm1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/tasks.psm1",
-      "sha256": "229510d19dd1f02b2f065dc189fe9b875d8c1227f299dd97638112d2ddd00e4a"
+      "sha256": "5e149de441c9572f153fac240662752aa3a6cf7cfcd6da3da41a7f9a0610bd31"
     },
     {
       "target": "Control\\catdesk-autostart.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/catdesk-autostart.ps1",
-      "sha256": "1c13952e1bd72bf97b7266cff5eae73f6a8aa783b9ff6eea238501d49952c9a2"
+      "sha256": "76f097446ee7f7c8b88eab4d4f4a4e5f9157af6c4d0092bf362a6a0e6ce53a08"
     },
     {
       "target": "Control\\catdesk-console-input.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/catdesk-console-input.ps1",
-      "sha256": "a6fdea5d53bf32019839acff959cd764f4bb65de01037b699555a7882d7d7c64"
+      "sha256": "3a5af77b7e1830edb79d1528694d03c4e261c5d05b9d8f9e42f4c532a0a90486"
     }
   ],
   "commands": [
