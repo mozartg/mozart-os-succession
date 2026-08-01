@@ -74,12 +74,26 @@ function Save-NewJob {
     return [pscustomobject]@{Id=$id;Path=$path}
 }
 
+function Resolve-JobPath {
+    param([string]$RequestedId)
+    if ([string]::IsNullOrWhiteSpace($RequestedId) -or $RequestedId -ieq "latest") {
+        $latest = Get-ChildItem -LiteralPath $jobsRoot -Filter "*.json" -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+        if (-not $latest) { throw "No jobs found." }
+        return $latest.FullName
+    }
+    $path = Join-Path $jobsRoot "$RequestedId.json"
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Job not found: $RequestedId" }
+    return $path
+}
+
 $joinedInput = (($Input | Where-Object { $null -ne $_ }) -join " ").Trim()
 
 try {
     switch ($Task) {
         "control_status" {
-            Send-Now "OK control_status :: FleetVersion=3.1.6; Dispatcher=ready"
+            Send-Now "OK control_status :: FleetVersion=3.1.8; Dispatcher=ready"
         }
         "catdesk_autostart" {
             if (-not (Test-Path -LiteralPath $catdeskStart -PathType Leaf)) { throw "CatDesk autostart script missing." }
@@ -101,14 +115,12 @@ try {
             Send-Now "OK catdesk_probe :: Online=$online; Phase=$phase; URL=$url; Error=$errorText"
         }
         "job_status" {
-            $path = Join-Path $jobsRoot "$joinedInput.json"
-            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Job not found." }
+            $path = Resolve-JobPath -RequestedId $joinedInput
             $job = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
             Send-Now "OK job_status :: Id=$($job.id); Task=$($job.task); Status=$($job.status); Exit=$($job.exitCode); Created=$($job.createdAt); Completed=$($job.completedAt)"
         }
         "job_result" {
-            $path = Join-Path $jobsRoot "$joinedInput.json"
-            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Job not found." }
+            $path = Resolve-JobPath -RequestedId $joinedInput
             $job = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
             $value = if ($job.status -eq "completed") { $job.result } elseif ($job.status -eq "failed") { $job.error } else { "Status=$($job.status)" }
             Send-Now "OK job_result :: Id=$($job.id); $value"
