@@ -4,19 +4,20 @@ param()
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$userRoot     = "C:\Users\mozar"
-$scriptRoot   = Join-Path $userRoot "TriggerCMD-Scripts"
-$controlRoot  = Join-Path $scriptRoot "Control"
-$backupRoot   = Join-Path $controlRoot "Backups"
-$triggerData  = Join-Path $userRoot ".TRIGGERcmdData"
-$commandsPath = Join-Path $triggerData "commands.json"
-$sendResult   = Join-Path $triggerData "sendresult.bat"
-$catdeskStart = Join-Path $controlRoot "catdesk-autostart.ps1"
-$catdeskState = Join-Path $scriptRoot "Autonomy\catdesk-autostart-status.json"
-$manifestUrl  = "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/manifest.json"
-$stamp        = Get-Date -Format "yyyyMMdd-HHmmss"
+$userRoot      = "C:\Users\mozar"
+$scriptRoot    = Join-Path $userRoot "TriggerCMD-Scripts"
+$controlRoot   = Join-Path $scriptRoot "Control"
+$backupRoot    = Join-Path $controlRoot "Backups"
+$receiptRoot   = Join-Path $controlRoot "Receipts\OneTime"
+$triggerData   = Join-Path $userRoot ".TRIGGERcmdData"
+$commandsPath  = Join-Path $triggerData "commands.json"
+$sendResult    = Join-Path $triggerData "sendresult.bat"
+$catdeskStart  = Join-Path $controlRoot "catdesk-autostart.ps1"
+$catdeskState  = Join-Path $scriptRoot "Autonomy\catdesk-autostart-status.json"
+$manifestUrl   = "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/manifest.json"
+$stamp         = Get-Date -Format "yyyyMMdd-HHmmss"
 
-New-Item -ItemType Directory -Force -Path $scriptRoot,$controlRoot,$backupRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $scriptRoot,$controlRoot,$backupRoot,$receiptRoot | Out-Null
 
 function Send-Now {
     param([Parameter(Mandatory)][string]$Text)
@@ -42,6 +43,90 @@ function Assert-UnderRoot {
     if (-not $full.StartsWith($rootFull,[StringComparison]::OrdinalIgnoreCase)) {
         throw "Target outside script root: $full"
     }
+}
+
+function Write-Utf8NoBom {
+    param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][string]$Content)
+    New-Item -ItemType Directory -Force -Path (Split-Path $Path -Parent) | Out-Null
+    [IO.File]::WriteAllText($Path,$Content,[Text.UTF8Encoding]::new($false))
+}
+
+function Invoke-OneTimeActions {
+    param([Parameter(Mandatory)]$Manifest)
+
+    if (-not ($Manifest.PSObject.Properties.Name -contains "oneTimeActions")) {
+        return @()
+    }
+
+    $actions = @($Manifest.oneTimeActions)
+    if ($actions.Count -eq 0) { return @() }
+
+    $tasksModule = Join-Path $controlRoot "tasks.psm1"
+    if (-not (Test-Path -LiteralPath $tasksModule -PathType Leaf)) {
+        throw "One-time actions requested but tasks module is missing."
+    }
+
+    Import-Module $tasksModule -Force -ErrorAction Stop
+    $summaries = @()
+
+    foreach ($action in $actions) {
+        $id = [string]$action.id
+        $task = [string]$action.task
+        $inputText = if ($action.PSObject.Properties.Name -contains "input") { [string]$action.input } else { "" }
+
+        if ($id -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{2,95}$') { throw "Invalid one-time action id: $id" }
+        if ([string]::IsNullOrWhiteSpace($task)) { throw "One-time action task is empty: $id" }
+
+        $successPath = Join-Path $receiptRoot "$id.json"
+        if (Test-Path -LiteralPath $successPath -PathType Leaf) {
+            $prior = Get-Content -LiteralPath $successPath -Raw | ConvertFrom-Json
+            if ([string]$prior.status -eq "VERIFIED_COMPLETE") {
+                $summaries += "Action=$id:already-complete"
+                continue
+            }
+        }
+
+        $started = (Get-Date).ToUniversalTime().ToString("o")
+        try {
+            $result = Invoke-ControlTask -Task $task -InputText $inputText
+            $completed = (Get-Date).ToUniversalTime().ToString("o")
+            $receipt = [ordered]@{
+                schema = "control-plane-one-time-action/v1"
+                action_id = $id
+                task = $task
+                input = $inputText
+                status = "VERIFIED_COMPLETE"
+                started_at = $started
+                completed_at = $completed
+                result = [string]$result
+                control_plane_version = [string]$Manifest.version
+            }
+            $json = $receipt | ConvertTo-Json -Depth 20
+            Write-Utf8NoBom -Path $successPath -Content $json
+            $digest = (Get-FileHash -LiteralPath $successPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Utf8NoBom -Path ($successPath + ".sha256") -Content "$digest  $([IO.Path]::GetFileName($successPath))`n"
+            $summaries += "Action=$id:complete:$result"
+        }
+        catch {
+            $completed = (Get-Date).ToUniversalTime().ToString("o")
+            $failurePath = Join-Path $receiptRoot ("{0}.failed-{1}.json" -f $id,(Get-Date -Format "yyyyMMdd-HHmmss"))
+            $failure = [ordered]@{
+                schema = "control-plane-one-time-action/v1"
+                action_id = $id
+                task = $task
+                input = $inputText
+                status = "FAILED"
+                started_at = $started
+                completed_at = $completed
+                error = $_.Exception.Message
+                control_plane_version = [string]$Manifest.version
+            }
+            Write-Utf8NoBom -Path $failurePath -Content ($failure | ConvertTo-Json -Depth 20)
+            throw "One-time action $id failed: $($_.Exception.Message)"
+        }
+    }
+
+    return $summaries
 }
 
 try {
@@ -132,6 +217,8 @@ try {
     Move-Item -LiteralPath $tempCommands -Destination $commandsPath -Force
     [IO.File]::WriteAllText((Join-Path $controlRoot "installed-version.json"),($manifest | ConvertTo-Json -Depth 20),[Text.UTF8Encoding]::new($false))
 
+    $actionSummaries = @(Invoke-OneTimeActions -Manifest $manifest)
+
     $catdeskSummary = "not-run"
     if (Test-Path -LiteralPath $catdeskState -PathType Leaf) {
         try {
@@ -142,7 +229,8 @@ try {
         }
     }
 
-    Send-Now "CATDESK :: $catdeskSummary | ControlPlane=$($manifest.version) Commands=$($managed.Count)"
+    $actionText = if ($actionSummaries.Count -gt 0) { " | " + ($actionSummaries -join " | ") } else { "" }
+    Send-Now "CATDESK :: $catdeskSummary | ControlPlane=$($manifest.version) Commands=$($managed.Count)$actionText"
 
     if (Test-Path -LiteralPath $catdeskStart -PathType Leaf) {
         Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(

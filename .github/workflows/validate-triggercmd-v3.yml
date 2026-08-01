@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Validate deployment hashes, PowerShell syntax, and command registration
+      - name: Validate deployment hashes, syntax, commands, and one-time actions
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -52,11 +52,16 @@ jobs:
           }
           $command = @($manifest.commands | Where-Object trigger -eq 'media_factory_bootstrap')
           if ($command.Count -ne 1 -or [string]$command[0].task -ne 'media_factory_bootstrap') { throw 'Media Factory command registration invalid.' }
+          $actions = @($manifest.oneTimeActions | Where-Object id -eq 'media-factory-bootstrap-20260801')
+          if ($actions.Count -ne 1 -or [string]$actions[0].task -ne 'media_factory_bootstrap') { throw 'Media Factory one-time action invalid.' }
+          $bootstrap = Get-Content (Join-Path $root 'bootstrap.ps1') -Raw
           $fleet = Get-Content (Join-Path $root 'fleet.ps1') -Raw
           $tasks = Get-Content (Join-Path $root 'tasks.psm1') -Raw
+          if ($bootstrap -notmatch 'Invoke-OneTimeActions') { throw 'Bootstrap one-time action executor missing.' }
+          if ($bootstrap -notmatch 'Invoke-ControlTask') { throw 'Bootstrap task invocation missing.' }
           if ($fleet -notmatch 'media_factory_bootstrap') { throw 'Fleet task missing.' }
           if ($tasks -notmatch 'Invoke-MediaFactoryBootstrap') { throw 'Task implementation missing.' }
-          Write-Host "Validated raw deployment bytes for Control Plane $($manifest.version) with $($manifest.commands.Count) managed commands."
+          Write-Host "Validated Control Plane $($manifest.version), $($manifest.commands.Count) commands, and $(@($manifest.oneTimeActions).Count) one-time action."
 
       - name: Verify published raw URLs after main updates
         if: github.event_name == 'push'
