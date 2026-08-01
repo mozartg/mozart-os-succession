@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "3.1.5",
+  "version": "3.1.6",
   "files": [
     {
       "target": "bootstrap.ps1",
@@ -10,7 +10,7 @@
     {
       "target": "Control\\fleet.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/fleet.ps1",
-      "sha256": "4227bc35f6d71c2b9dc38cfc96d641648762479713d8b1aeebe2573a96d7f25b"
+      "sha256": "ba7a355f935694f4050064192dad65817601e55265357bc04dd09a38180037b9"
     },
     {
       "target": "Control\\worker.ps1",
@@ -20,7 +20,7 @@
     {
       "target": "Control\\tasks.psm1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/tasks.psm1",
-      "sha256": "4f1e2792c130d997aa714edcfbd695dffafe294245781af1c07d3c8fdc2aa4de"
+      "sha256": "5e149de441c9572f153fac240662752aa3a6cf7cfcd6da3da41a7f9a0610bd31"
     },
     {
       "target": "Control\\catdesk-autostart.ps1",
@@ -49,6 +49,7 @@
     {"trigger":"playwright_status","task":"playwright_status","allowParams":false},
     {"trigger":"browser_status","task":"browser_status","allowParams":false},
     {"trigger":"approved_inventory","task":"approved_inventory","allowParams":false},
+    {"trigger":"media_factory_bootstrap","task":"media_factory_bootstrap","allowParams":false},
     {"trigger":"trigger_reload","task":"trigger_reload","allowParams":false}
   ]
 }
