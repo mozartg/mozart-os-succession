@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "3.1.12",
+  "version": "3.1.13",
   "files": [
     {
       "target": "bootstrap.ps1",
@@ -40,7 +40,7 @@
     {
       "target": "Control\\media-factory-repository-create.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/media-factory-repository-create.ps1",
-      "sha256": "2a594a4ab746fe21053cbd363f4e5b6daa24510b7be876eeae1092543be16d59"
+      "sha256": "a24de89132849bb0808fbe319bf360e38faaf2f787a17eb64e39746b840cdb6c"
     }
   ],
   "commands": [
