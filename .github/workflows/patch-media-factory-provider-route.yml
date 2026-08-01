@@ -1,0 +1,89 @@
+name: Patch Media Factory provider route
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-media-factory-provider-route.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Replace task implementation and bind manifest hashes
+        shell: python
+        run: |
+          import hashlib
+          import json
+          import re
+          from pathlib import Path
+
+          root = Path('triggercmd/v3')
+          tasks_path = root / 'tasks.psm1'
+          script_path = root / 'media-factory-repository-create.ps1'
+          manifest_path = root / 'manifest.json'
+
+          tasks = tasks_path.read_text(encoding='utf-8')
+          replacement = r'''function Invoke-MediaFactoryBootstrap {
+              $script = "C:\Users\mozar\TriggerCMD-Scripts\Control\media-factory-repository-create.ps1"
+              if (-not (Test-Path -LiteralPath $script -PathType Leaf)) {
+                  throw "Media Factory provider-create script is missing."
+              }
+              $output = @(& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File $script 2>&1)
+              $code = $LASTEXITCODE
+              $text = ($output | Out-String).Trim()
+              if ($code -ne 0) {
+                  if ([string]::IsNullOrWhiteSpace($text)) { $text = "Provider-create script exited $code." }
+                  throw $text
+              }
+              return $text
+          }
+
+          function Invoke-ControlTask {'''
+          pattern = r'function Invoke-MediaFactoryBootstrap \{.*?\n\}\n\nfunction Invoke-ControlTask \{'
+          updated, count = re.subn(pattern, replacement, tasks, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit('Could not replace exactly one Invoke-MediaFactoryBootstrap function.')
+          tasks_path.write_text(updated, encoding='utf-8', newline='\n')
+
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          manifest['version'] = '3.1.11'
+          file_entry = {
+              'target': 'Control\\media-factory-repository-create.ps1',
+              'url': 'https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/media-factory-repository-create.ps1',
+              'sha256': hashlib.sha256(script_path.read_bytes()).hexdigest(),
+          }
+          files = [item for item in manifest['files'] if item['target'] != file_entry['target']]
+          files.append(file_entry)
+          for item in files:
+              if item['target'] == 'Control\\tasks.psm1':
+                  item['sha256'] = hashlib.sha256(tasks_path.read_bytes()).hexdigest()
+          manifest['files'] = files
+          manifest['oneTimeActions'] = [{
+              'id': 'media-factory-bootstrap-provider-routes-20260801',
+              'task': 'media_factory_bootstrap',
+              'input': ''
+          }]
+          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+      - name: Commit patched provider route
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'Provider route already patched.'
+            exit 0
+          fi
+          git config user.name 'Media Factory Recovery Fleet'
+          git config user.email 'media-factory-recovery@users.noreply.github.com'
+          git add triggercmd/v3/tasks.psm1 triggercmd/v3/manifest.json
+          git commit -m 'Delegate Media Factory creation to staged provider routes'
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
