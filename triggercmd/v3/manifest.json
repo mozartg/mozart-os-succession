@@ -20,7 +20,7 @@
     {
       "target": "Control\\tasks.psm1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/tasks.psm1",
-      "sha256": "5e149de441c9572f153fac240662752aa3a6cf7cfcd6da3da41a7f9a0610bd31"
+      "sha256": "229510d19dd1f02b2f065dc189fe9b875d8c1227f299dd97638112d2ddd00e4a"
     },
     {
       "target": "Control\\catdesk-autostart.ps1",
