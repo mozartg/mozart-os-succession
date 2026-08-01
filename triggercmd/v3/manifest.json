@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "3.0.1",
+  "version": "3.1.0",
   "files": [
     {
       "target": "bootstrap.ps1",
@@ -10,7 +10,7 @@
     {
       "target": "Control\\fleet.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/fleet.ps1",
-      "sha256": "bde355b57fcefc750c420e11cda9848bed5cbeb8345d0b6000c9a0f3f16f28c8"
+      "sha256": "4227bc35f6d71c2b9dc38cfc96d641648762479713d8b1aeebe2573a96d7f25b"
     },
     {
       "target": "Control\\worker.ps1",
@@ -21,6 +21,11 @@
       "target": "Control\\tasks.psm1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/tasks.psm1",
       "sha256": "4f1e2792c130d997aa714edcfbd695dffafe294245781af1c07d3c8fdc2aa4de"
+    },
+    {
+      "target": "Control\\catdesk-autostart.ps1",
+      "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/catdesk-autostart.ps1",
+      "sha256": "8d1eab5ff97de44d6d6f3bc634abf244ef7991e6b4bb5acd5a85eeabce0dbf03"
     }
   ],
   "commands": [
@@ -34,6 +39,8 @@
     {"trigger":"port_check","task":"port_check","allowParams":true},
     {"trigger":"command_find","task":"command_find","allowParams":true},
     {"trigger":"catdesk_status","task":"catdesk_status","allowParams":false},
+    {"trigger":"catdesk_autostart","task":"catdesk_autostart","allowParams":false},
+    {"trigger":"catdesk_probe","task":"catdesk_probe","allowParams":false},
     {"trigger":"playwright_status","task":"playwright_status","allowParams":false},
     {"trigger":"browser_status","task":"browser_status","allowParams":false},
     {"trigger":"approved_inventory","task":"approved_inventory","allowParams":false},
