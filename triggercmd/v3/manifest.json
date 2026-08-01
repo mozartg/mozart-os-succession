@@ -25,7 +25,7 @@
     {
       "target": "Control\\catdesk-autostart.ps1",
       "url": "https://raw.githubusercontent.com/mozartg/mozart-os-succession/main/triggercmd/v3/catdesk-autostart.ps1",
-      "sha256": "76f097446ee7f7c8b88eab4d4f4a4e5f9157af6c4d0092bf362a6a0e6ce53a08"
+      "sha256": "1c13952e1bd72bf97b7266cff5eae73f6a8aa783b9ff6eea238501d49952c9a2"
     },
     {
       "target": "Control\\catdesk-console-input.ps1",
