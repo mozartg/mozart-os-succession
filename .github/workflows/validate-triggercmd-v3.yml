@@ -32,7 +32,8 @@ jobs:
             'Control\fleet.ps1' = 'fleet.ps1'
             'Control\worker.ps1' = 'worker.ps1'
             'Control\tasks.psm1' = 'tasks.psm1'
-            'Control\catdesk-autostart.ps1' = 'catdesk-autostart.ps1'
+            'Control\catdesk-autostart.ps1' = 'catdesk-autostart-wrapper.ps1'
+            'Control\catdesk-autostart-core.ps1' = 'catdesk-autostart.ps1'
             'Control\catdesk-console-input.ps1' = 'catdesk-console-input.ps1'
             'Control\media-factory-repository-create.ps1' = 'media-factory-repository-create.ps1'
           }
@@ -46,7 +47,7 @@ jobs:
               throw "Raw-byte hash mismatch: $($file.target) expected=$($file.sha256) actual=$actual"
             }
           }
-          foreach ($path in @('bootstrap.ps1','fleet.ps1','worker.ps1','tasks.psm1','catdesk-autostart.ps1','catdesk-console-input.ps1','media-factory-repository-create.ps1')) {
+          foreach ($path in @('bootstrap.ps1','fleet.ps1','worker.ps1','tasks.psm1','catdesk-autostart-wrapper.ps1','catdesk-autostart.ps1','catdesk-console-input.ps1','media-factory-repository-create.ps1')) {
             $tokens=$null; $errors=$null
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $root $path),[ref]$tokens,[ref]$errors) | Out-Null
             if ($errors.Count -gt 0) { throw "$path syntax: $($errors[0].Message)" }
