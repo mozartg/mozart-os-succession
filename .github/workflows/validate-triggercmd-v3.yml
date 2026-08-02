@@ -59,9 +59,16 @@ jobs:
           $bootstrap = Get-Content (Join-Path $root 'bootstrap.ps1') -Raw
           $fleet = Get-Content (Join-Path $root 'fleet.ps1') -Raw
           $tasks = Get-Content (Join-Path $root 'tasks.psm1') -Raw
-          $provider = Get-Content (Join-Path $root 'media-factory-repository-create.ps1') -Raw
+          $providerWrapper = Get-Content (Join-Path $root 'media-factory-repository-create.ps1') -Raw
           if ($bootstrap -notmatch 'Invoke-OneTimeActions') { throw 'Bootstrap one-time action executor missing.' }
           if ($tasks -notmatch 'media-factory-repository-create.ps1') { throw 'Task delegate is not bound to the provider script.' }
+          $coreUrlMatch = [regex]::Match($providerWrapper, '\$coreUrl\s*=\s*"([^"]+)"')
+          if (-not $coreUrlMatch.Success) { throw 'Provider wrapper does not declare a pinned core URL.' }
+          $coreUrl = $coreUrlMatch.Groups[1].Value
+          if ($coreUrl -notmatch '/[0-9a-f]{40}/triggercmd/v3/media-factory-repository-create\.ps1$') { throw 'Provider core URL is not pinned to an immutable commit.' }
+          $providerCorePath = Join-Path $env:RUNNER_TEMP 'media-factory-provider-core.ps1'
+          Invoke-WebRequest -Uri $coreUrl -OutFile $providerCorePath -UseBasicParsing
+          $provider = Get-Content $providerCorePath -Raw
           if ($provider -notmatch 'official_rest_authenticated_user') { throw 'Official REST route receipt is missing.' }
           if ($provider -notmatch 'gh_cli_authenticated_user_default_owner') { throw 'GitHub CLI fallback receipt is missing.' }
           if ($provider -notmatch 'credential_disclosed = \$false') { throw 'Credential-disclosure boundary is missing.' }
