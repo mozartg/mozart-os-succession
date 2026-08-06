@@ -69,26 +69,38 @@ jobs:
         with:
           python-version: ${{ inputs.python_version || '3.12' }}
 
-      - name: Confirm repository content
-        id: content
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$(find . -type f -not -path './.git/*' -print -quit)"
-
-      - name: Audit repository landing page
-        id: landing
+      - name: Audit repository structure and landing truth
+        id: audit
         shell: python
         env:
           STRICT_LANDING: ${{ inputs.strict_landing || false }}
         run: |
           import json
           import os
-          from pathlib import Path
+          import pathlib
+          import py_compile
+          import subprocess
+          import sys
 
-          report_dir = Path('.ci')
+          root = pathlib.Path('.')
+          report_dir = root / '.ci'
           report_dir.mkdir(exist_ok=True)
-          root = Path('.')
+          excluded = {
+              '.git', 'node_modules', '.venv', 'venv', 'dist', 'build',
+              '.next', '.cache', '__pycache__'
+          }
+
+          def excluded_path(path: pathlib.Path) -> bool:
+              return any(part in excluded for part in path.parts)
+
+          files = [path for path in root.rglob('*') if path.is_file() and not excluded_path(path)]
+          hard_failures = []
+          landing_failures = []
+          warnings = []
+
+          if not files:
+              hard_failures.append('repository contains no files')
+
           readmes = sorted(
               path for path in root.iterdir()
               if path.is_file() and path.name.lower().startswith('readme')
@@ -98,194 +110,139 @@ jobs:
               (path for path in root.iterdir() if path.is_file() and path.name.lower() == 'agents.md'),
               None,
           )
-
-          placeholders = (
-              'REPLACE_WITH_PROJECT_ID',
-              '<YOUR_GIT_URL>',
-              '<YOUR_PROJECT_NAME>',
-              'Simply visit the Lovable Project',
-          )
-          status_terms = (
-              'VERIFIED',
-              'PARTIALLY VERIFIED',
-              'IMPLEMENTED-UNVERIFIED',
-              'PROTOTYPE',
-              'PLACEHOLDER',
-              'LEGACY',
-              'DEPRECATED',
-              'QUARANTINED',
-          )
-          high_risk_terms = (
-              'always-on',
-              'fully automated',
-              'production-ready',
-              'central command',
-              'agent swarm',
-              'deterministic',
-              'canonical',
-          )
-
           text = readme.read_text(encoding='utf-8', errors='replace') if readme else ''
           first_lines = '\n'.join(text.splitlines()[:40])
+
+          placeholders = (
+              'REPLACE_WITH_PROJECT_ID', '<YOUR_GIT_URL>', '<YOUR_PROJECT_NAME>',
+              'Simply visit the Lovable Project'
+          )
+          status_terms = (
+              'VERIFIED', 'PARTIALLY VERIFIED', 'IMPLEMENTED-UNVERIFIED',
+              'PROTOTYPE', 'PLACEHOLDER', 'LEGACY', 'DEPRECATED', 'QUARANTINED'
+          )
+          high_risk_terms = (
+              'always-on', 'fully automated', 'production-ready', 'central command',
+              'agent swarm', 'deterministic', 'canonical'
+          )
           found_placeholders = [value for value in placeholders if value in text]
           status_visible = any(value.lower() in first_lines.lower() for value in status_terms)
           risk_terms = [value for value in high_risk_terms if value.lower() in text.lower()]
 
-          failures = []
-          warnings = []
           if readme is None:
-              failures.append('root README is missing')
+              landing_failures.append('root README is missing')
           if found_placeholders:
-              failures.append(f'template placeholders remain: {found_placeholders}')
+              landing_failures.append(f'template placeholders remain: {found_placeholders}')
           if readme is not None and not status_visible:
-              failures.append('no visible status marker appears in the first 40 README lines')
+              landing_failures.append('no visible status marker appears in the first 40 README lines')
           if risk_terms:
               warnings.append(f'high-risk operational terms need linked evidence: {risk_terms}')
           if agents is None:
               warnings.append('AGENTS.md is absent; README must not be treated as agent authority')
 
+          merge_markers = []
+          for path in files:
+              try:
+                  for line_number, line in enumerate(
+                      path.read_text(encoding='utf-8', errors='ignore').splitlines(), start=1
+                  ):
+                      if line.startswith('<<<<<<< ') or line.startswith('>>>>>>> '):
+                          merge_markers.append(f'{path}:{line_number}')
+              except OSError as exc:
+                  hard_failures.append(f'{path}: read failed: {exc}')
+          if merge_markers:
+              hard_failures.append(f'unresolved merge markers: {merge_markers}')
+
+          json_failures = []
+          for path in sorted(root.rglob('*.json')):
+              if excluded_path(path):
+                  continue
+              name = path.name.lower()
+              if (
+                  name.startswith('tsconfig') or name.startswith('jsconfig')
+                  or name.endswith('.code-workspace') or name == 'devcontainer.json'
+              ):
+                  continue
+              try:
+                  json.loads(path.read_text(encoding='utf-8-sig'))
+              except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                  json_failures.append(f'{path}: {exc}')
+          if json_failures:
+              hard_failures.append('strict JSON failures: ' + '; '.join(json_failures))
+
+          shell_failures = []
+          for path in sorted(root.rglob('*.sh')):
+              if excluded_path(path):
+                  continue
+              result = subprocess.run(
+                  ['bash', '-n', str(path)], capture_output=True, text=True, check=False
+              )
+              if result.returncode != 0:
+                  shell_failures.append(f'{path}: {result.stderr.strip()}')
+          if shell_failures:
+              hard_failures.append('shell syntax failures: ' + '; '.join(shell_failures))
+
+          compile_failures = []
+          compiled = 0
+          for path in sorted(root.rglob('*.py')):
+              if excluded_path(path):
+                  continue
+              try:
+                  py_compile.compile(str(path), doraise=True)
+                  compiled += 1
+              except (py_compile.PyCompileError, OSError, UnicodeError) as exc:
+                  compile_failures.append({'path': str(path), 'error': str(exc)})
+          if compile_failures:
+              hard_failures.append(
+                  'Python compile failures: ' + '; '.join(
+                      f"{item['path']}: {item['error']}" for item in compile_failures
+                  )
+              )
+
+          strict = os.environ.get('STRICT_LANDING', 'false').lower() == 'true'
           report = {
-              'schema': 'repository-landing-report.v1',
+              'schema': 'repository-structure-report.v2',
               'repository': os.environ.get('GITHUB_REPOSITORY'),
               'commit': os.environ.get('GITHUB_SHA'),
+              'file_count': len(files),
               'readme': str(readme) if readme else None,
               'agents_file': str(agents) if agents else None,
               'status_visible_in_first_40_lines': status_visible,
               'template_placeholders': found_placeholders,
               'high_risk_terms': risk_terms,
-              'failures': failures,
+              'json_files_failed': len(json_failures),
+              'shell_files_failed': len(shell_failures),
+              'python_files_compiled': compiled,
+              'python_files_failed': len(compile_failures),
+              'landing_failures': landing_failures,
               'warnings': warnings,
-              'strict': os.environ.get('STRICT_LANDING', 'false').lower() == 'true',
+              'hard_failures': hard_failures,
+              'strict_landing': strict,
           }
-          (report_dir / 'repository-landing-report.json').write_text(
+          (report_dir / 'repository-structure-report.json').write_text(
               json.dumps(report, indent=2) + '\n', encoding='utf-8'
           )
           print(json.dumps(report, indent=2))
 
-          summary = Path(os.environ['GITHUB_STEP_SUMMARY'])
-          with summary.open('a', encoding='utf-8') as handle:
-              handle.write('## Repository landing audit\n\n')
+          with pathlib.Path(os.environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as handle:
+              handle.write('## Repository structure and landing audit\n\n')
               handle.write(f"- README: `{report['readme'] or 'missing'}`\n")
               handle.write(f"- AGENTS.md: `{report['agents_file'] or 'missing'}`\n")
               handle.write(f"- Visible status marker: `{status_visible}`\n")
-              handle.write(f"- Template placeholders: `{found_placeholders}`\n")
+              handle.write(f"- Landing defects: `{landing_failures}`\n")
               handle.write(f"- High-risk terms: `{risk_terms}`\n")
+              handle.write(f"- Hard structural failures: `{hard_failures}`\n")
 
-          for item in failures + warnings:
+          for item in landing_failures + warnings:
               print(f'::warning title=Repository landing audit::{item}')
-
-          if report['strict'] and failures:
-              raise SystemExit('Strict landing audit failed: ' + '; '.join(failures))
-
-      - name: Reject unresolved merge conflicts
-        id: merge_markers
-        shell: bash
-        run: |
-          set -euo pipefail
-          markers="$(grep -RIn --exclude-dir=.git -E '^(<<<<<<< |>>>>>>> )' . || true)"
-          if [ -n "$markers" ]; then
-            echo 'Unresolved merge markers found:'
-            printf '%s\n' "$markers"
-            exit 1
-          fi
-
-      - name: Validate strict JSON files
-        id: json
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          import pathlib
-          import sys
-
-          excluded_dirs = {
-              '.git', 'node_modules', '.venv', 'venv', 'dist', 'build',
-              '.next', '.cache', '.vscode', '.devcontainer'
-          }
-
-          def is_jsonc(path: pathlib.Path) -> bool:
-              name = path.name.lower()
-              return (
-                  name.startswith('tsconfig')
-                  or name.startswith('jsconfig')
-                  or name.endswith('.code-workspace')
-                  or name == 'devcontainer.json'
-              )
-
-          failures = []
-          for path in pathlib.Path('.').rglob('*.json'):
-              if any(part in excluded_dirs for part in path.parts) or is_jsonc(path):
-                  continue
-              try:
-                  json.loads(path.read_text(encoding='utf-8-sig'))
-              except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-                  failures.append(f'{path}: {exc}')
-
-          if failures:
-              print('Strict JSON validation failed:')
-              print('\n'.join(failures))
-              sys.exit(1)
-          print('JSON parse OK')
-          PY
-
-      - name: Validate shell syntax
-        id: shell
-        shell: bash
-        run: |
-          set -euo pipefail
-          find . -type f -name '*.sh' \
-            -not -path './.git/*' \
-            -not -path '*/node_modules/*' \
-            -print0 | xargs -0 -r -n1 bash -n
-
-      - name: Compile Python sources
-        id: python_compile
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          import pathlib
-          import py_compile
-          import sys
-
-          excluded_dirs = {
-              '.git', 'node_modules', '.venv', 'venv', 'dist', 'build',
-              '.next', '.cache', '__pycache__'
-          }
-          report_dir = pathlib.Path('.ci')
-          report_dir.mkdir(exist_ok=True)
-          failures = []
-          compiled = 0
-
-          for path in sorted(pathlib.Path('.').rglob('*.py')):
-              if any(part in excluded_dirs for part in path.parts):
-                  continue
-              try:
-                  py_compile.compile(str(path), doraise=True)
-                  compiled += 1
-              except py_compile.PyCompileError as exc:
-                  failures.append({'path': str(path), 'error': str(exc)})
-              except (OSError, UnicodeError) as exc:
-                  failures.append({'path': str(path), 'error': repr(exc)})
-
-          report = {
-              'schema': 'repository-python-compile-report.v1',
-              'compiled': compiled,
-              'failed': len(failures),
-              'failures': failures,
-          }
-          (report_dir / 'python-compile-report.json').write_text(
-              json.dumps(report, indent=2) + '\n', encoding='utf-8'
-          )
-          print(json.dumps(report, indent=2))
-          if failures:
-              sys.exit(1)
-          PY
+          if hard_failures:
+              raise SystemExit('Repository structural audit failed: ' + '; '.join(hard_failures))
+          if strict and landing_failures:
+              raise SystemExit('Strict landing audit failed: ' + '; '.join(landing_failures))
 
       - name: Audit GitHub Actions workflows
         id: actionlint
+        if: always()
         shell: bash
         env:
           ENFORCE_ACTIONLINT: ${{ inputs.enforce_actionlint || false }}
@@ -317,7 +274,7 @@ jobs:
           set -e
           cat .ci/actionlint-report.txt
           if [ "$lint_status" -ne 0 ]; then
-            echo "::warning title=GitHub Actions audit::actionlint found workflow defects; see artifact report"
+            echo '::warning title=GitHub Actions audit::actionlint found workflow defects; see artifact report'
             if [ "${ENFORCE_ACTIONLINT,,}" = 'true' ]; then
               exit "$lint_status"
             fi
@@ -325,7 +282,7 @@ jobs:
 
       - name: Run Node project checks
         id: node
-        if: ${{ hashFiles('package.json') != '' }}
+        if: ${{ always() && hashFiles('package.json') != '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -342,7 +299,7 @@ jobs:
 
       - name: Install Python project
         id: python_install
-        if: ${{ hashFiles('requirements.txt', 'pyproject.toml') != '' }}
+        if: ${{ always() && hashFiles('requirements.txt', 'pyproject.toml') != '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -354,13 +311,12 @@ jobs:
 
       - name: Run Python tests
         id: python_tests
+        if: ${{ always() && steps.python_install.outcome != 'failure' }}
         shell: bash
         run: |
           set -euo pipefail
           if find . -type f \( -name 'test_*.py' -o -name '*_test.py' \) \
-            -not -path './.git/*' \
-            -not -path '*/.venv/*' \
-            -not -path '*/venv/*' | grep -q .; then
+            -not -path './.git/*' -not -path '*/.venv/*' -not -path '*/venv/*' | grep -q .; then
             python -m pip install pytest
             pytest -q
           else
@@ -371,12 +327,7 @@ jobs:
         if: always()
         shell: python
         env:
-          CONTENT_OUTCOME: ${{ steps.content.outcome }}
-          LANDING_OUTCOME: ${{ steps.landing.outcome }}
-          MERGE_MARKERS_OUTCOME: ${{ steps.merge_markers.outcome }}
-          JSON_OUTCOME: ${{ steps.json.outcome }}
-          SHELL_OUTCOME: ${{ steps.shell.outcome }}
-          PYTHON_COMPILE_OUTCOME: ${{ steps.python_compile.outcome }}
+          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
           ACTIONLINT_OUTCOME: ${{ steps.actionlint.outcome }}
           NODE_OUTCOME: ${{ steps.node.outcome }}
           PYTHON_INSTALL_OUTCOME: ${{ steps.python_install.outcome }}
@@ -387,12 +338,7 @@ jobs:
           from pathlib import Path
 
           gates = {
-              'repository_content': os.environ.get('CONTENT_OUTCOME') or 'not-run',
-              'landing_audit': os.environ.get('LANDING_OUTCOME') or 'not-run',
-              'merge_markers': os.environ.get('MERGE_MARKERS_OUTCOME') or 'not-run',
-              'strict_json': os.environ.get('JSON_OUTCOME') or 'not-run',
-              'shell_syntax': os.environ.get('SHELL_OUTCOME') or 'not-run',
-              'python_compile': os.environ.get('PYTHON_COMPILE_OUTCOME') or 'not-run',
+              'structure_and_landing': os.environ.get('AUDIT_OUTCOME') or 'not-run',
               'actions_audit': os.environ.get('ACTIONLINT_OUTCOME') or 'not-run',
               'node_checks': os.environ.get('NODE_OUTCOME') or 'skipped',
               'python_install': os.environ.get('PYTHON_INSTALL_OUTCOME') or 'skipped',
@@ -410,7 +356,6 @@ jobs:
           Path('.ci/repository-contract-report.json').write_text(
               json.dumps(report, indent=2) + '\n', encoding='utf-8'
           )
-
           with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as handle:
               handle.write('\n## Complete repository contract\n\n')
               handle.write('| Gate | Outcome |\n|---|---|\n')
@@ -424,8 +369,9 @@ jobs:
         with:
           name: repository-contract-${{ github.run_id }}
           path: .ci
+          include-hidden-files: true
           retention-days: 14
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Report success
         run: echo 'Repository micro-tests passed.'
