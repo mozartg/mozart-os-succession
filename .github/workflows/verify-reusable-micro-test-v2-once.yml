@@ -63,10 +63,10 @@ jobs:
               raise SystemExit(f'reusable micro-test contract missing: {missing}')
           print('Reusable micro-test v2 static contract passed.')
 
-  exercise-default-contract:
+  exercise-strict-landing-contract:
     uses: ./.github/workflows/reusable-micro-test.yml
     with:
       node_version: '24'
       python_version: '3.12'
       enforce_actionlint: false
-      strict_landing: false
+      strict_landing: true
