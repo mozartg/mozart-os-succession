@@ -1,4 +1,4 @@
-name: VSSR2 Tool Capability Matrix
+name: VSSR2 Tool Capability Matrix Repair
 
 on:
   push:
@@ -81,7 +81,7 @@ jobs:
               cd /tmp/omnigent
               python -m venv /tmp/venv
               /tmp/venv/bin/pip install -q --upgrade pip setuptools wheel
-              /tmp/venv/bin/pip install -q -e ".[dev]"
+              OMNIGENT_SKIP_WEB_UI=true /tmp/venv/bin/pip install -q -e ".[dev]"
               /tmp/venv/bin/omnigent --version
               /tmp/venv/bin/omnigent --help >/tmp/omnigent-help.txt
               /tmp/venv/bin/omni diagnose --help >/tmp/omnigent-diagnose-help.txt
@@ -101,13 +101,14 @@ jobs:
           set +e
           docker run --rm \
             -v "$AUDIT_ROOT/omnigent:/src:ro" \
-            ghcr.io/astral-sh/uv:python3.12-bookworm-slim bash -lc '
+            python:3.12-bookworm bash -lc '
               set -euo pipefail
               apt-get update -qq
               DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git build-essential >/dev/null
+              python -m pip install -q --upgrade "uv>=0.11.8"
               cp -a /src /tmp/omnigent
               cd /tmp/omnigent
-              uv sync --extra dev
+              OMNIGENT_SKIP_WEB_UI=true uv sync --extra dev
               .venv/bin/omnigent --version
               .venv/bin/omnigent --help >/tmp/omnigent-help.txt
               .venv/bin/omni diagnose --help >/tmp/omnigent-diagnose-help.txt
@@ -127,13 +128,14 @@ jobs:
           set +e
           docker run --rm \
             -v "$AUDIT_ROOT/omnigent:/src:ro" \
-            ghcr.io/astral-sh/uv:python3.12-bookworm-slim bash -lc '
+            python:3.12-bookworm bash -lc '
               set -euo pipefail
               apt-get update -qq
               DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git build-essential >/dev/null
+              python -m pip install -q --upgrade "uv>=0.11.8"
               cp -a /src /tmp/omnigent
               cd /tmp/omnigent
-              uv sync --extra dev
+              OMNIGENT_SKIP_WEB_UI=true uv sync --extra dev
               mapfile -t files < <(
                 find tests -type f -name "test_*.py" \
                   | grep -Ei "(policy|sandbox|scheduled|session|harness|mcp|slack|auth|project|subagent|polly|debby|database|cli)" \
@@ -157,13 +159,14 @@ jobs:
           set +e
           docker run --rm \
             -v "$AUDIT_ROOT/omnigent:/src:ro" \
-            ghcr.io/astral-sh/uv:python3.12-bookworm-slim bash -lc '
+            python:3.12-bookworm bash -lc '
               set -euo pipefail
               apt-get update -qq
               DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git build-essential >/dev/null
+              python -m pip install -q --upgrade "uv>=0.11.8"
               cp -a /src /tmp/omnigent
               cd /tmp/omnigent
-              uv sync --extra dev
+              OMNIGENT_SKIP_WEB_UI=true uv sync --extra dev
               mapfile -t files < <(
                 find tests -type f -name "test_*.py" \
                   | grep -Ei "(policy|scheduled|sandbox)" \
@@ -227,12 +230,13 @@ jobs:
           docker run --rm \
             -v "$AUDIT_ROOT/openinterpreter:/src:ro" \
             -v "$AUDIT_ROOT/cache/cargo:/cargo" \
-            rust:1-bookworm bash -lc '
+            rust:1-bookworm bash -c '
               set -euo pipefail
               apt-get update -qq
               DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git pkg-config libssl-dev clang cmake >/dev/null
               cp -a /src /tmp/openinterpreter
               cd /tmp/openinterpreter
+              export PATH=/usr/local/cargo/bin:$PATH
               export CARGO_HOME=/cargo/home
               export CARGO_TARGET_DIR=/cargo/target
               timeout 1800 cargo build --release --bin interpreter
@@ -257,12 +261,13 @@ jobs:
           docker run --rm \
             -v "$AUDIT_ROOT/openinterpreter:/src:ro" \
             -v "$AUDIT_ROOT/cache/cargo:/cargo" \
-            rust:1-bookworm bash -lc '
+            rust:1-bookworm bash -c '
               set -euo pipefail
               apt-get update -qq
               DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git pkg-config libssl-dev clang cmake >/dev/null
               cp -a /src /tmp/openinterpreter
               cd /tmp/openinterpreter
+              export PATH=/usr/local/cargo/bin:$PATH
               export CARGO_HOME=/cargo/home
               export CARGO_TARGET_DIR=/cargo/target
               cargo metadata --no-deps --format-version 1 | grep -q "\"name\":\"codex-core\""
@@ -282,12 +287,13 @@ jobs:
           docker run --rm \
             -v "$AUDIT_ROOT/openinterpreter:/src:ro" \
             -v "$AUDIT_ROOT/cache/cargo:/cargo" \
-            rust:1-bookworm bash -lc '
+            rust:1-bookworm bash -c '
               set -euo pipefail
               apt-get update -qq
               DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git pkg-config libssl-dev clang cmake jq >/dev/null
               cp -a /src /tmp/openinterpreter
               cd /tmp/openinterpreter
+              export PATH=/usr/local/cargo/bin:$PATH
               export CARGO_HOME=/cargo/home
               export CARGO_TARGET_DIR=/cargo/target
               pkg="$(
