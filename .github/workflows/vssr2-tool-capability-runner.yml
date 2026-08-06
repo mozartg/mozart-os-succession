@@ -1,0 +1,29 @@
+name: VSSR2 Tool Capability Runner
+
+on:
+  push:
+    branches:
+      - vssr2/tool-capability-test-20260806
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      AUDIT_ROOT: /tmp/vssr2-capability-audit-final
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute disposable VSSR2 audit
+        shell: bash
+        run: bash scripts/run_vssr2_tool_capability_final.sh
+      - name: Upload final receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vssr2-tool-capability-matrix-final
+          path: /tmp/vssr2-capability-audit-final/results
+          if-no-files-found: error
+          retention-days: 7
