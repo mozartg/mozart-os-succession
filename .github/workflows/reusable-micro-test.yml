@@ -1,32 +1,187 @@
 name: Reusable Repository Micro Tests
+
 on:
   workflow_call:
+    inputs:
+      node_version:
+        description: Node.js version used for repository checks
+        required: false
+        type: string
+        default: '24'
+      python_version:
+        description: Python version used for repository checks
+        required: false
+        type: string
+        default: '3.12'
+      enforce_actionlint:
+        description: Fail when GitHub Actions workflow lint finds defects
+        required: false
+        type: boolean
+        default: false
+      strict_landing:
+        description: Fail when the root README is missing, templated, or lacks a visible status marker
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
+    inputs:
+      node_version:
+        description: Node.js version used for repository checks
+        required: false
+        type: string
+        default: '24'
+      python_version:
+        description: Python version used for repository checks
+        required: false
+        type: string
+        default: '3.12'
+      enforce_actionlint:
+        description: Fail when GitHub Actions workflow lint finds defects
+        required: false
+        type: boolean
+        default: false
+      strict_landing:
+        description: Fail when the root README is missing, templated, or lacks a visible status marker
+        required: false
+        type: boolean
+        default: false
+
 permissions:
   contents: read
+
 jobs:
   micro-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: {node-version: '20'}
-      - uses: actions/setup-python@v5
-        with: {python-version: '3.12'}
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node_version || '24' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ inputs.python_version || '3.12' }}
 
       - name: Confirm repository content
+        id: content
         shell: bash
         run: |
           set -euo pipefail
           test -n "$(find . -type f -not -path './.git/*' -print -quit)"
 
+      - name: Audit repository landing page
+        id: landing
+        shell: python
+        env:
+          STRICT_LANDING: ${{ inputs.strict_landing || false }}
+        run: |
+          import json
+          import os
+          from pathlib import Path
+
+          report_dir = Path('.ci')
+          report_dir.mkdir(exist_ok=True)
+          root = Path('.')
+          readmes = sorted(
+              path for path in root.iterdir()
+              if path.is_file() and path.name.lower().startswith('readme')
+          )
+          readme = readmes[0] if readmes else None
+          agents = next(
+              (path for path in root.iterdir() if path.is_file() and path.name.lower() == 'agents.md'),
+              None,
+          )
+
+          placeholders = (
+              'REPLACE_WITH_PROJECT_ID',
+              '<YOUR_GIT_URL>',
+              '<YOUR_PROJECT_NAME>',
+              'Simply visit the Lovable Project',
+          )
+          status_terms = (
+              'VERIFIED',
+              'PARTIALLY VERIFIED',
+              'IMPLEMENTED-UNVERIFIED',
+              'PROTOTYPE',
+              'PLACEHOLDER',
+              'LEGACY',
+              'DEPRECATED',
+              'QUARANTINED',
+          )
+          high_risk_terms = (
+              'always-on',
+              'fully automated',
+              'production-ready',
+              'central command',
+              'agent swarm',
+              'deterministic',
+              'canonical',
+          )
+
+          text = readme.read_text(encoding='utf-8', errors='replace') if readme else ''
+          first_lines = '\n'.join(text.splitlines()[:40])
+          found_placeholders = [value for value in placeholders if value in text]
+          status_visible = any(value.lower() in first_lines.lower() for value in status_terms)
+          risk_terms = [value for value in high_risk_terms if value.lower() in text.lower()]
+
+          failures = []
+          warnings = []
+          if readme is None:
+              failures.append('root README is missing')
+          if found_placeholders:
+              failures.append(f'template placeholders remain: {found_placeholders}')
+          if readme is not None and not status_visible:
+              failures.append('no visible status marker appears in the first 40 README lines')
+          if risk_terms:
+              warnings.append(f'high-risk operational terms need linked evidence: {risk_terms}')
+          if agents is None:
+              warnings.append('AGENTS.md is absent; README must not be treated as agent authority')
+
+          report = {
+              'schema': 'repository-landing-report.v1',
+              'repository': os.environ.get('GITHUB_REPOSITORY'),
+              'commit': os.environ.get('GITHUB_SHA'),
+              'readme': str(readme) if readme else None,
+              'agents_file': str(agents) if agents else None,
+              'status_visible_in_first_40_lines': status_visible,
+              'template_placeholders': found_placeholders,
+              'high_risk_terms': risk_terms,
+              'failures': failures,
+              'warnings': warnings,
+              'strict': os.environ.get('STRICT_LANDING', 'false').lower() == 'true',
+          }
+          (report_dir / 'repository-landing-report.json').write_text(
+              json.dumps(report, indent=2) + '\n', encoding='utf-8'
+          )
+          print(json.dumps(report, indent=2))
+
+          summary = Path(os.environ['GITHUB_STEP_SUMMARY'])
+          with summary.open('a', encoding='utf-8') as handle:
+              handle.write('## Repository landing audit\n\n')
+              handle.write(f"- README: `{report['readme'] or 'missing'}`\n")
+              handle.write(f"- AGENTS.md: `{report['agents_file'] or 'missing'}`\n")
+              handle.write(f"- Visible status marker: `{status_visible}`\n")
+              handle.write(f"- Template placeholders: `{found_placeholders}`\n")
+              handle.write(f"- High-risk terms: `{risk_terms}`\n")
+
+          for item in failures + warnings:
+              print(f'::warning title=Repository landing audit::{item}')
+
+          if report['strict'] and failures:
+              raise SystemExit('Strict landing audit failed: ' + '; '.join(failures))
+
       - name: Reject unresolved merge conflicts
+        id: merge_markers
         shell: bash
         run: |
           set -euo pipefail
-          # A real unresolved Git conflict includes start/end markers with a label.
-          # Do not treat Markdown Setext headings made of '=' characters as conflicts.
           markers="$(grep -RIn --exclude-dir=.git -E '^(<<<<<<< |>>>>>>> )' . || true)"
           if [ -n "$markers" ]; then
             echo 'Unresolved merge markers found:'
@@ -35,6 +190,7 @@ jobs:
           fi
 
       - name: Validate strict JSON files
+        id: json
         shell: bash
         run: |
           set -euo pipefail
@@ -74,13 +230,17 @@ jobs:
           PY
 
       - name: Validate shell syntax
+        id: shell
         shell: bash
         run: |
           set -euo pipefail
-          find . -type f -name '*.sh' -not -path './.git/*' -not -path '*/node_modules/*' -print0 |
-            xargs -0 -r -n1 bash -n
+          find . -type f -name '*.sh' \
+            -not -path './.git/*' \
+            -not -path '*/node_modules/*' \
+            -print0 | xargs -0 -r -n1 bash -n
 
       - name: Compile Python sources
+        id: python_compile
         shell: bash
         run: |
           set -euo pipefail
@@ -124,24 +284,56 @@ jobs:
               sys.exit(1)
           PY
 
-      - name: Upload Python compile report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-compile-report-${{ github.run_id }}
-          path: .ci/python-compile-report.json
-          retention-days: 7
-          if-no-files-found: warn
+      - name: Audit GitHub Actions workflows
+        id: actionlint
+        shell: bash
+        env:
+          ENFORCE_ACTIONLINT: ${{ inputs.enforce_actionlint || false }}
+        run: |
+          set -uo pipefail
+          mkdir -p .ci /tmp/actionlint-install
+          curl --fail --silent --show-error --location \
+            --output /tmp/actionlint.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz
+          curl --fail --silent --show-error --location \
+            --output /tmp/actionlint-checksums.txt \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_checksums.txt
+          grep 'actionlint_1.7.7_linux_amd64.tar.gz$' /tmp/actionlint-checksums.txt \
+            | sed 's#  actionlint_1.7.7_linux_amd64.tar.gz#  /tmp/actionlint.tar.gz#' \
+            | sha256sum --check --strict
+          tar -xzf /tmp/actionlint.tar.gz -C /tmp/actionlint-install actionlint
+
+          mapfile -d '' workflows < <(
+            find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 2>/dev/null | sort -z
+          )
+          if [ "${#workflows[@]}" -eq 0 ]; then
+            echo 'No GitHub Actions workflows found.' | tee .ci/actionlint-report.txt
+            exit 0
+          fi
+
+          set +e
+          /tmp/actionlint-install/actionlint "${workflows[@]}" >.ci/actionlint-report.txt 2>&1
+          lint_status=$?
+          set -e
+          cat .ci/actionlint-report.txt
+          if [ "$lint_status" -ne 0 ]; then
+            echo "::warning title=GitHub Actions audit::actionlint found workflow defects; see artifact report"
+            if [ "${ENFORCE_ACTIONLINT,,}" = 'true' ]; then
+              exit "$lint_status"
+            fi
+          fi
 
       - name: Run Node project checks
+        id: node
         if: ${{ hashFiles('package.json') != '' }}
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f package-lock.json ]; then
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
             npm ci --no-audit --no-fund
           else
-            npm install --no-audit --no-fund
+            echo '::warning title=Dependency reproducibility::package.json exists without package-lock.json or npm-shrinkwrap.json; using non-mutating npm install'
+            npm install --package-lock=false --no-audit --no-fund
           fi
           npm run test --if-present
           npm run typecheck --if-present
@@ -149,6 +341,7 @@ jobs:
           npm run build --if-present
 
       - name: Install Python project
+        id: python_install
         if: ${{ hashFiles('requirements.txt', 'pyproject.toml') != '' }}
         shell: bash
         run: |
@@ -160,13 +353,79 @@ jobs:
           fi
 
       - name: Run Python tests
+        id: python_tests
         shell: bash
         run: |
           set -euo pipefail
-          if find . -type f \( -name 'test_*.py' -o -name '*_test.py' \) -not -path './.git/*' -not -path '*/.venv/*' -not -path '*/venv/*' | grep -q .; then
+          if find . -type f \( -name 'test_*.py' -o -name '*_test.py' \) \
+            -not -path './.git/*' \
+            -not -path '*/.venv/*' \
+            -not -path '*/venv/*' | grep -q .; then
             python -m pip install pytest
             pytest -q
+          else
+            echo 'No Python test files found.'
           fi
+
+      - name: Write complete repository contract report
+        if: always()
+        shell: python
+        env:
+          CONTENT_OUTCOME: ${{ steps.content.outcome }}
+          LANDING_OUTCOME: ${{ steps.landing.outcome }}
+          MERGE_MARKERS_OUTCOME: ${{ steps.merge_markers.outcome }}
+          JSON_OUTCOME: ${{ steps.json.outcome }}
+          SHELL_OUTCOME: ${{ steps.shell.outcome }}
+          PYTHON_COMPILE_OUTCOME: ${{ steps.python_compile.outcome }}
+          ACTIONLINT_OUTCOME: ${{ steps.actionlint.outcome }}
+          NODE_OUTCOME: ${{ steps.node.outcome }}
+          PYTHON_INSTALL_OUTCOME: ${{ steps.python_install.outcome }}
+          PYTHON_TESTS_OUTCOME: ${{ steps.python_tests.outcome }}
+        run: |
+          import json
+          import os
+          from pathlib import Path
+
+          gates = {
+              'repository_content': os.environ.get('CONTENT_OUTCOME') or 'not-run',
+              'landing_audit': os.environ.get('LANDING_OUTCOME') or 'not-run',
+              'merge_markers': os.environ.get('MERGE_MARKERS_OUTCOME') or 'not-run',
+              'strict_json': os.environ.get('JSON_OUTCOME') or 'not-run',
+              'shell_syntax': os.environ.get('SHELL_OUTCOME') or 'not-run',
+              'python_compile': os.environ.get('PYTHON_COMPILE_OUTCOME') or 'not-run',
+              'actions_audit': os.environ.get('ACTIONLINT_OUTCOME') or 'not-run',
+              'node_checks': os.environ.get('NODE_OUTCOME') or 'skipped',
+              'python_install': os.environ.get('PYTHON_INSTALL_OUTCOME') or 'skipped',
+              'python_tests': os.environ.get('PYTHON_TESTS_OUTCOME') or 'not-run',
+          }
+          report = {
+              'schema': 'repository-contract-report.v2',
+              'repository': os.environ.get('GITHUB_REPOSITORY'),
+              'commit': os.environ.get('GITHUB_SHA'),
+              'run_id': os.environ.get('GITHUB_RUN_ID'),
+              'run_url': f"https://github.com/{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/{os.environ.get('GITHUB_RUN_ID')}",
+              'gates': gates,
+          }
+          Path('.ci').mkdir(exist_ok=True)
+          Path('.ci/repository-contract-report.json').write_text(
+              json.dumps(report, indent=2) + '\n', encoding='utf-8'
+          )
+
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as handle:
+              handle.write('\n## Complete repository contract\n\n')
+              handle.write('| Gate | Outcome |\n|---|---|\n')
+              for gate, outcome in gates.items():
+                  handle.write(f'| `{gate}` | `{outcome}` |\n')
+              handle.write(f"\nRun: {report['run_url']}\n")
+
+      - name: Upload repository evidence reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: repository-contract-${{ github.run_id }}
+          path: .ci
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Report success
         run: echo 'Repository micro-tests passed.'
